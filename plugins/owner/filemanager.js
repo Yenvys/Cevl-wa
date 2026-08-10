@@ -4,7 +4,7 @@
  */
 
 import { readdir, mkdir, writeFile, unlink, readFile, rm } from "node:fs/promises";
-import { join, resolve, basename, dirname, relative } from "node:path";
+import { join, resolve, basename, dirname, relative, sep } from "node:path";
 import fs from "node:fs";
 import mimes from "mime-types";
 import { res } from '../../lib/response.js';
@@ -18,6 +18,8 @@ export default {
     desc: 'File manager ini harusnya.',
     exec: async (m, { sock, args, command }) => {
         if (!m.isOwner) return m.reply(res.owner);
+
+        const isSafePath = (target) => target === ROOT_DIR || target.startsWith(ROOT_DIR + sep);
 
         if (!fs.existsSync(ROOT_DIR)) await mkdir(ROOT_DIR, { recursive: true });
 
@@ -45,7 +47,7 @@ export default {
                 const subPath = subArgs.join('/');
                 const targetPath = resolve(join(ROOT_DIR, subPath));
 
-                if (!targetPath.startsWith(ROOT_DIR)) return m.reply(res.owner);
+                if (!isSafePath(targetPath)) return m.reply(res.owner);
                 if (!fs.existsSync(targetPath)) return m.reply(res.error);
 
                 const buildTree = async (dir, prefix = "") => {
@@ -82,7 +84,7 @@ export default {
                 const folderName = subArgs.join('/');
                 const targetPath = resolve(join(ROOT_DIR, folderName));
 
-                if (!targetPath.startsWith(ROOT_DIR)) return m.reply("_Akses pembuatan ditolak._");
+                if (!isSafePath(targetPath)) return m.reply("_Akses pembuatan ditolak._");
                 if (fs.existsSync(targetPath)) return m.reply("_Direktori folder tersebut sudah ada._");
 
                 await mkdir(targetPath, { recursive: true });
@@ -115,7 +117,7 @@ export default {
                 const absoluteFileName = newFileNameInput.endsWith(`.${extension}`) ? newFileNameInput : `${newFileNameInput}.${extension}`;
                 const finalFileAbsolutePath = join(targetDirectory, absoluteFileName);
 
-                if (!finalFileAbsolutePath.startsWith(ROOT_DIR)) return m.reply("_Akses penyimpanan ditolak._");
+                if (!isSafePath(finalFileAbsolutePath)) return m.reply("_Akses penyimpanan ditolak._");
 
                 await mkdir(dirname(finalFileAbsolutePath), { recursive: true });
                 await writeFile(finalFileAbsolutePath, downloadedBuffer);
@@ -133,7 +135,7 @@ export default {
                 const filePath = subArgs.join(' ');
                 const targetPath = resolve(join(ROOT_DIR, filePath));
 
-                if (!targetPath.startsWith(ROOT_DIR)) return m.reply("_Akses pembacaan berkas di luar akar ditolak._");
+                if (!isSafePath(targetPath)) return m.reply("_Akses pembacaan berkas di luar akar ditolak._");
                 if (!fs.existsSync(targetPath) || fs.lstatSync(targetPath).isDirectory()) {
                     return m.reply(res.error);
                 }
@@ -166,7 +168,7 @@ export default {
                     if (!folderPath) return m.reply("tentukan nama path direktori folder yang ingin dibersihkan.");
 
                     const targetPath = resolve(join(ROOT_DIR, folderPath));
-                    if (!targetPath.startsWith(ROOT_DIR) || targetPath === ROOT_DIR) return m.reply(res.owner);
+                    if (!isSafePath(targetPath) || targetPath === ROOT_DIR) return m.reply(res.owner);
                     if (!fs.existsSync(targetPath)) return m.reply("_Direktori tidak ditemukan/Tidak ada._");
 
                     await rm(targetPath, { recursive: true, force: true });
@@ -176,7 +178,7 @@ export default {
                 const filePath = subArgs.join(' ');
                 const targetPath = resolve(join(ROOT_DIR, filePath));
 
-                if (!targetPath.startsWith(ROOT_DIR)) return m.reply("_Akses modifikasi ditolak._");
+                if (!isSafePath(targetPath)) return m.reply("_Akses modifikasi ditolak._");
                 if (!fs.existsSync(targetPath)) return m.reply("__Direktori yang dituju memang sudah tidak ada._");
                 
                 if (fs.lstatSync(targetPath).isDirectory()) {

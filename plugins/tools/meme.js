@@ -72,8 +72,7 @@ export default {
 
             // Kirim gambar hasil meme sebagai stiker
             await sock.sendSticker(m.from, memeBuffer, m, {
-                packname: "Envy",
-                author: ""
+                isAnimated: false
             });
 
             await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });

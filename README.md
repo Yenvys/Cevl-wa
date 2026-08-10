@@ -1,6 +1,6 @@
 # Yenvy Bot WhatsApp
 
-Yenvy adalah bot WhatsApp multi-fitur yang ditulis dalam NodeJS menggunakan library Baileys. Bot ini memiliki struktur *plugin-based* yang dinamis (Universal Chat Style) yang memungkinkan perubahan, penambahan, dan penghapusan fitur tanpa harus merestart ulang bot (Hot Reload).
+Yenvy adalah Simple bot WhatsApp yang ditulis dalam NodeJS menggunakan library Baileys. struktur *plugin-based* yang dinamis (Universal Chat Style) memungkinkan perubahan, penambahan, dan penghapusan fitur tanpa merestart bot (Hot Reload).
 
 ## ✨ Fitur Utama
 - **Plugin Dinamis**: File plugin otomatis dimuat ulang jika ada perubahan (`chokidar` auto-watch).
@@ -25,13 +25,13 @@ Yenvy adalah bot WhatsApp multi-fitur yang ditulis dalam NodeJS menggunakan libr
    ```
 
 3. **Konfigurasi Environment (`.env`):**
-   Duplikat file `.env.example` dan ubah namanya menjadi `.env`.
-   Lalu isi seluruh kredensial API dan nomor Anda (Owner & Pairing):
+   Copy file `.env.example` dan ubah namanya jadi `.env`.
+   Lalu isi (API, Owner & Pairing):
    ```env
    OWNER_NUMBERS=628...
    PAIRING_NUMBER=628...
    GEMINI_API_KEY=...
-   JEREXD_API_KEY=...
+   ....
    ```
 
 4. **Jalankan Bot:**
@@ -42,9 +42,9 @@ Yenvy adalah bot WhatsApp multi-fitur yang ditulis dalam NodeJS menggunakan libr
 ## 🛠️ Panduan Penggunaan
 - Saat pertama kali berjalan, bot akan memunculkan *Pairing Code* di terminal jika `PAIRING_NUMBER` sudah diatur di `.env`.
 - Buka aplikasi WhatsApp Anda > Tautkan Perangkat > Masukkan kode yang muncul di terminal.
-- Ketik `.menu` atau `.help` di dalam chat WhatsApp untuk melihat seluruh daftar command yang tersedia.
+- Ketik `.menu` atau `.help` dalam chat WhatsApp untuk melihat seluruh daftar command yang tersedia.
 
 ## 🔧 Struktur Folder
-- `/plugins/`: Menyimpan semua modul fitur (commands). Tambah file `.js` baru di sini dan bot akan langsung memuatnya secara otomatis!
+- `/plugins/`: Menyimpan semua modul fitur (commands). Tambah file `.js` baru di sini dan bot langsung memuat secara otomatis!
 - `/lib/`: Library inti, database (SQLite), response handling, dan middleware.
-- `/data/`: Menyimpan database lokal, file sesi login, dan pengaturan global. (Folder ini diabaikan oleh Git untuk keamanan privasi).
+- `/data/`: Menyimpan database lokal, file sesi login, dan pengaturan global. 

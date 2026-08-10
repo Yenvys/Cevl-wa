@@ -8,13 +8,12 @@ import os from 'os';
 import { startSock } from './lib/client.js';
 import { Handler } from './lib/handler.js';
 import { Logger } from './lib/logger.js';
-// removed connectDB import
 import { store } from './lib/helper.js';
 import { listenAlertSchedule } from './plugins/class/alert.js';
 
 const customTemp = path.join(process.cwd(), 'data', 'tmp');
 if (!fs.existsSync(customTemp)) {
-    fs.mkdirSync(customTemp, { recursive: true });
+  fs.mkdirSync(customTemp, { recursive: true });
 }
 
 process.env.TMPDIR = customTemp;
@@ -27,19 +26,18 @@ const storeFilePath = path.join(process.cwd(), 'data', 'store.json');
 async function main() {
   const sessionId = process.argv[2] || process.env.SESSION_ID || 'default';
   const log = new Logger(sessionId);
-  
+
   log.info(`Menginisialisasi sistem bot untuk sesi: ${sessionId}...`);
 
   if (fs.existsSync(storeFilePath)) {
-      try {
-          store.readFromFile(storeFilePath);
-          log.info('Berhasil memuat riwayat chat lama dari data/store.json');
-      } catch (e) {
-          log.error('STORE_READ_ERR', `Gagal membaca file store: ${e.message}`);
-      }
+    try {
+      store.readFromFile(storeFilePath);
+      log.info('Berhasil memuat riwayat chat lama dari data/store.json');
+    } catch (e) {
+      log.error('STORE_READ_ERR', `Gagal membaca file store: ${e.message}`);
+    }
   }
 
-  // Removed connectDB, JSON DB will initialize on-demand
   const handler = new Handler({
     pluginDir: path.join(process.cwd(), 'plugins'),
     logger: log
@@ -55,28 +53,28 @@ async function main() {
     log.success(`Yenvy [${sessionId}] siap!`);
 
     setInterval(async () => {
-        try {
-            await store.writeToFile(storeFilePath);
-        } catch (e) {
-            console.error('[STORE_SAVE_ERR]', e.message);
-        }
-    }, 10000);
+      try {
+        await store.writeToFile(storeFilePath);
+      } catch (e) {
+        console.error('[STORE_SAVE_ERR]', e.message);
+      }
+    }, 300000);
 
   } catch (error) {
     log.error('MAIN_STARTUP', `Koneksi gagal: ${error.message}`);
-    process.exit(1); 
+    process.exit(1);
   }
 }
 
 process.on('uncaughtException', (err) => {
   console.error('WARN (Uncaught Exception):', err);
-  try { store.writeToFileSync(storeFilePath); } catch {}
+  try { store.writeToFileSync(storeFilePath); } catch { }
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('WARN (Unhandled Rejection) at:', promise, 'reason:', reason);
-  try { store.writeToFileSync(storeFilePath); } catch {}
+  try { store.writeToFileSync(storeFilePath); } catch { }
   process.exit(1);
 });
 

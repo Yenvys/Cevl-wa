@@ -28,7 +28,6 @@ export default {
             );
 
             await sock.sendSticker(m.from, buffer, m, {
-                packname: 'Envy',
                 isAnimated: /video/.test(mime)
             });
 
