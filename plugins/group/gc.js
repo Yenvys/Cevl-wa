@@ -12,9 +12,9 @@ export default {
     category: 'grup',
     desc: 'Pusat kendali konfigurasi, status operasional, serta hak akses anggota grup.',
     exec: async (m, { sock, args, query, command }) => {
-        if (!m.isGroup) return sock.sendMessage(m.from, { react: { text: '⁉️', key: m.key } });
-        if (!m.isAdmin && !m.isOwner) return m.reply(res.owner);
-        if (!m.isBotAdmin) return await sock.sendMessage(m.from, { react: { text: '❕', key: m.key } });
+        if (!m.isGroup) return m.reply(res.group);
+        if (!m.isOwner && !m.isAdmin) return m.reply('_kamu bukan admin/owner!_');
+        if (!m.isBotAdmin) return m.reply('_Bot bukan admin/owner!_');
 
         const targetCmd = command.toLowerCase();
 

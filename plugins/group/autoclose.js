@@ -8,10 +8,10 @@ import { res } from '../../lib/response.js';
 
 export default {
     cmd: ['autoclose', 'ac'],
-    category: 'owner',
+    category: 'group',
     desc: 'Pengaturan grup khusus untuk fitur Auto Close / Open',
     exec: async (m, { sock, args, command, handler }) => {
-        if (!m.isOwner) return m.reply(res.owner);
+        if (!m.isOwner && !m.isAdmin) return m.reply('_kamu bukan admin/owner!_');
 
         const opt = args[0]?.toLowerCase();
         if (opt === 'add' && m.isGroup) {

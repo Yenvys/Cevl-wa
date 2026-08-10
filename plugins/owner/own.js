@@ -16,9 +16,9 @@ export default {
     category: 'owner',
     desc: 'Menambahkan, menghapus, atau melihat daftar nomor telepon yang memiliki hak akses penuh sebagai Owner bot.',
     exec: async (m, { sock, args = [] }) => {
-        if (!m.isOwner) return m.reply(res.owner);
-
         const action = args[0]?.toLowerCase();
+        
+        if (action !== 'list' && !m.isOwner) return m.reply(res.owner);
 
         // ==========================================
         // OPSI: LIHAT DAFTAR OWNER (list) VIA V-CARD

@@ -21,8 +21,8 @@ export default {
             isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
         }
         
-        if (!isAdmin && !m.isOwner) return m.reply(res.owner);
-        if (!isBotAdmin) return m.reply(res.error);
+        if (!m.isOwner && !isAdmin) return m.reply('_kamu bukan admin/owner!_');
+        if (!isBotAdmin) return m.reply('_Bot bukan admin/owner!_');
 
         const q = m.quoted ? m.quoted : m;
         const mime = (q.msg || q).mimetype || '';

@@ -12,9 +12,9 @@ export default {
     category: 'grup',
     desc: 'Mengeluarkan member dari grup',
     exec: async (m, { sock }) => {
-        if (!m.isGroup) return; 
-        if (!m.isOwner && !m.isAdmin) return m.reply('_Anda bukan admin atau owner grup._');
-        if (!m.isBotAdmin) return m.reply(res.error);
+        if (!m.isGroup) return m.reply(res.group);
+        if (!m.isOwner && !m.isAdmin) return m.reply('_kamu bukan admin/owner!_');
+        if (!m.isBotAdmin) return m.reply('_Bot bukan admin/owner!_');
 
         let target = m.mentionedJid?.[0] || m.quoted?.sender || (m.query ? m.query.replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
         if (!target || target.length < 10) return m.reply(res.format(m.prefix, command, `@tag/reply pesan`));

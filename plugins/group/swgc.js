@@ -13,7 +13,7 @@ export default {
     desc: 'Mengirim ulang pesan atau media ke dalam grup (status whatsapp)',
     exec: async (m, { sock, query }) => {
         if (!m.isGroup) return m.reply(res.group);
-        if (!m.isAdmin && !m.isOwner) return m.reply(res.owner);
+        if (!m.isOwner && !m.isAdmin) return m.reply('_kamu bukan admin/owner!_');
 
         let q = m.quoted ? m.quoted : m;
         let mime = (q.msg || q).mimetype || '';
