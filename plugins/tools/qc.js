@@ -152,13 +152,22 @@ export default {
             </html>`;
 
             // Import puppeteer dynamically
-            const pkg = await import('puppeteer-real-browser');
-            const connect = pkg.connect || pkg.default.connect;
+            const puppeteer = (await import('puppeteer')).default;
 
-            const { browser, page } = await connect({
-                headless: 'auto',
-                turnstile: true
+            const browser = await puppeteer.launch({
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu'
+                ]
             });
+            const page = await browser.newPage();
 
             try {
                 await page.setViewport({ width: 800, height: 800, deviceScaleFactor: 3 });
