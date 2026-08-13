@@ -170,7 +170,7 @@ export default {
             const page = await browser.newPage();
 
             try {
-                await page.setViewport({ width: 800, height: 800, deviceScaleFactor: 3 });
+                await page.setViewport({ width: 800, height: 800, deviceScaleFactor: 4 });
                 await page.setContent(html, { waitUntil: 'networkidle0' });
                 const element = await page.$('#qc-container');
                 const screenshotBuffer = await element.screenshot({ omitBackground: true });
