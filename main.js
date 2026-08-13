@@ -45,10 +45,12 @@ async function main() {
   await handler.initPlugins();
 
   try {
-    const sock = await startSock(sessionId, log);
-    await handler.attach(sock);
+    const onSocketReady = async (sock) => {
+      await handler.attach(sock);
+      listenAlertSchedule(sock);
+    };
 
-    listenAlertSchedule(sock);
+    const sock = await startSock(sessionId, log, onSocketReady);
 
     log.success(`Yenvy [${sessionId}] siap!`);
 
