@@ -1,7 +1,7 @@
 /**
  * plugins/download/dl.js
  * Media Downloader (Interactive Selection & Auto-Clear React)
- * Author: Omegatech v1.1
+ * from: Omegatech v1.1
  */
 
 import axios from 'axios';
