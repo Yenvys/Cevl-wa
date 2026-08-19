@@ -1,6 +1,6 @@
 export const config = {
     "ownerNumbers": [
-        "62895806279898"
+        "62..."
     ],
     "ownerName": "Yenvys",
     "botName": "Cel",

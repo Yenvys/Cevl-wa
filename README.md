@@ -1,15 +1,21 @@
-# Yenvy Bot WhatsApp
+# Cevl Bot WhatsApp
 
-Yenvy adalah Simple bot WhatsApp yang ditulis dalam NodeJS menggunakan library Baileys. struktur *plugin-based* yang dinamis (Universal Chat Style) memungkinkan perubahan, penambahan, dan penghapusan fitur tanpa merestart bot (Hot Reload).
+Cevl adalah Simple bot WhatsApp yang ditulis dalam NodeJS menggunakan library Baileys. struktur *plugin-based* yang dinamis (Universal Chat Style) memungkinkan perubahan, penambahan, dan penghapusan fitur tanpa merestart bot (Hot Reload).
 
 ##  Fitur Utama
 - **Plugin Dinamis**: File plugin otomatis dimuat ulang jika ada perubahan (`chokidar` auto-watch).
 - **Mode Fleksibel**: Dapat berjalan di mode Publik, Self, atau Grup-only (`.mode`).
 - **AI Integrasi**: Didukung oleh Google Gemini (`.ai`).
-- **Downloader Lengkap**: YouTube, TikTok, Threads, Instagram, dll.
+- **Downloader**: YouTube, TikTok, Threads, Instagram, dll.
 - **Manajemen Grup**: Autoclose (jam malam otomatis), Antilink, Welcome & Goodbye messages.
 - **Roleplay / RPG Sistem**: Uang, Inventory, Leveling, Market.
 - **Koneksi Stabil**: Mendukung koneksi menggunakan metode Pairing Code.
+
+## Persyaratan (Requirements)
+Sebelum menginstal bot ini, pastikan sistem Anda memiliki:
+- **Node.js** (Gunakan versi LTS: v18, v20, atau v22. *Jangan gunakan versi terbaru jika mengalami error saat `npm install`*)
+- **Git**
+- **FFmpeg** (opsional, disarankan untuk fitur manipulasi media)
 
 ##  Cara Instalasi
 
