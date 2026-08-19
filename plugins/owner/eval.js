@@ -11,22 +11,22 @@ export default {
     category: 'owner',
     desc: 'Evaluate JavaScript code',
     exec: async (m, { sock, query }) => {
-        if (!m.isOwner) return; 
+        if (!m.isOwner) return;
         if (!query) return m.reply('Format salah! Masukkan kode skrip JavaScript yang ingin dievaluasi.');
 
         try {
             let evaled;
             try {
-                evaled = await eval(query); 
+                evaled = await eval(query);
             } catch {
                 evaled = await eval(`(async () => { ${query} })()`);
             }
 
             if (typeof evaled !== 'string') evaled = util.inspect(evaled, { depth: 1 });
-            
-            await m.reply(`\`\`\`${evaled}\`\`\``);
+
+            await m.reply(`${evaled}`);
         } catch (e) {
-            await m.reply(`\`\`\`${String(e)}\`\`\``);
+            await m.reply(`${String(e)}`);
         }
     }
 };

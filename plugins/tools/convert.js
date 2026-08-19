@@ -5,7 +5,35 @@
 
 import { getMedia, createTemp, cleanup, toGif, toMp3, stickerToImage, convertToMp4 } from '../../lib/helper.js';
 import fs from 'node:fs';
+import axios from 'axios';
+import FormData from 'form-data';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { res } from '../../lib/response.js';
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
+async function uploadToCatbox(buffer, filename) {
+    const form = new FormData();
+    form.append('reqtype', 'fileupload');
+    form.append('fileToUpload', buffer, { filename });
+    const { data } = await axios.post('https://catbox.moe/user/api.php', form, {
+        headers: form.getHeaders(),
+        timeout: 60000
+    });
+    return data;
+}
+
+async function uploadToTmpfiles(buffer, filename) {
+    const form = new FormData();
+    form.append('file', buffer, { filename });
+    const { data } = await axios.post('https://tmpfiles.org/api/v1/upload', form, {
+        headers: form.getHeaders(),
+        timeout: 60000
+    });
+    if (data?.data?.url) return data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    return null;
+}
 
 
 export default {
@@ -22,6 +50,7 @@ export default {
         helpText += `│ ◦ ${m.prefix}${command} --togif - Ubah video ke GIF animasi\n`;
         helpText += `│ ◦ ${m.prefix}${command} --toimg / --toimage - Ubah stiker ke Gambar\n`;
         helpText += `│ ◦ ${m.prefix}${command} --tomp3 / --toaudio - Ubah video/audio ke MP3\n`;
+        helpText += `│ ◦ ${m.prefix}${command} --tourl / --tolink - Upload media ke URL\n`;
         helpText += `╰───────────────────────────\n\n`;
         helpText += `_Contoh: Reply stiker lalu ketik: ${m.prefix}${command} --toimg_`;
 
@@ -36,19 +65,58 @@ export default {
             // ==========================================
             case '--tomp4':
             case '--tovideo': {
-                if (!/video|gif/.test(mime)) return m.reply("_Target harus berupa video atau gif._");
+                if (!/video|gif|webp|sticker/.test(mime)) return m.reply("_Target harus berupa video, gif, atau stiker animasi._");
                 await sock.sendMessage(m.from, { react: { text: '⏳', key: m.key } });
 
-                try {
-                    const buffer = await q.download();
-                    const mp4Buffer = await convertToMp4(buffer);
+                // Animated sticker (webp) → MP4
+                if (/webp|sticker/.test(mime)) {
+                    const tmpIn = createTemp('gif');
+                    const tmpOut = tmpIn.replace('.gif', '_out.mp4');
 
-                    await sock.sendMessage(m.from, { video: mp4Buffer }, { quoted: m });
-                    await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                } catch (e) { 
-                    console.error('[CONV_MP4_ERR]', e);
-                    await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    await m.reply(res.error); 
+                    try {
+                        const buffer = await q.download();
+                        const sharp = (await import('sharp')).default;
+                        const gifBuffer = await sharp(buffer, { animated: true }).gif().toBuffer();
+                        fs.writeFileSync(tmpIn, gifBuffer);
+
+                        await new Promise((resolve, reject) => {
+                            ffmpeg(tmpIn)
+                                .outputOptions([
+                                    '-vf', 'scale=480:-1:flags=lanczos',
+                                    '-pix_fmt', 'yuv420p'
+                                ])
+                                .toFormat('mp4')
+                                .on('end', resolve)
+                                .on('error', reject)
+                                .save(tmpOut);
+                        });
+
+                        await sock.sendMessage(m.from, {
+                            video: fs.readFileSync(tmpOut),
+                            mimetype: 'video/mp4'
+                        }, { quoted: m });
+                        await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
+                    } catch (e) {
+                        console.error('[CONV_STICKER_MP4_ERR]', e);
+                        await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                        await m.reply(res.error);
+                    } finally {
+                        cleanup(tmpIn);
+                        cleanup(tmpOut);
+                    }
+                // Video/GIF → MP4
+                } else {
+                    try {
+                        const buffer = await q.download();
+                        const mp4Buffer = await convertToMp4(buffer);
+
+                        await sock.sendMessage(m.from, { video: mp4Buffer }, { quoted: m });
+                        await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
+                    } catch (e) { 
+                        console.error('[CONV_MP4_ERR]', e);
+                        await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                        await m.reply(res.error); 
+                    }
                 }
                 break;
             }
@@ -57,29 +125,69 @@ export default {
             // FLAG: --togif
             // ==========================================
             case '--togif': {
-                if (!/video/.test(mime)) return m.reply("_Target harus berupa video untuk diubah ke GIF._");
+                if (!/video|webp|sticker/.test(mime)) return m.reply("_Target harus berupa video atau stiker animasi untuk diubah ke GIF._");
                 await sock.sendMessage(m.from, { react: { text: '⏳', key: m.key } });
-                
-                const tmpIn = createTemp('mp4');
-                const tmpOut = tmpIn.replace('.mp4', '_out.mp4');
 
-                try {
-                    const buffer = await q.download();
-                    fs.writeFileSync(tmpIn, buffer);
-                    await toGif(tmpIn, tmpOut);
+                // Animated sticker (webp) → GIF
+                if (/webp|sticker/.test(mime)) {
+                    const tmpIn = createTemp('gif');
+                    const tmpOut = tmpIn.replace('.gif', '_out.mp4');
 
-                    await sock.sendMessage(m.from, { 
-                        video: fs.readFileSync(tmpOut), 
-                        gifPlayback: true 
-                    }, { quoted: m });
-                    await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                } catch (e) { 
-                    console.error('[CONV_GIF_ERR]', e);
-                    await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    await m.reply(res.error); 
-                } finally {
-                    cleanup(tmpIn);
-                    cleanup(tmpOut);
+                    try {
+                        const buffer = await q.download();
+                        const sharp = (await import('sharp')).default;
+                        const gifBuffer = await sharp(buffer, { animated: true }).gif().toBuffer();
+                        fs.writeFileSync(tmpIn, gifBuffer);
+
+                        await new Promise((resolve, reject) => {
+                            ffmpeg(tmpIn)
+                                .outputOptions([
+                                    '-vf', 'scale=480:-1:flags=lanczos,fps=12',
+                                    '-loop', '0',
+                                    '-pix_fmt', 'yuv420p'
+                                ])
+                                .toFormat('mp4')
+                                .on('end', resolve)
+                                .on('error', reject)
+                                .save(tmpOut);
+                        });
+
+                        await sock.sendMessage(m.from, {
+                            video: fs.readFileSync(tmpOut),
+                            gifPlayback: true
+                        }, { quoted: m });
+                        await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
+                    } catch (e) {
+                        console.error('[CONV_STICKER_GIF_ERR]', e);
+                        await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                        await m.reply(res.error);
+                    } finally {
+                        cleanup(tmpIn);
+                        cleanup(tmpOut);
+                    }
+                // Video → GIF
+                } else {
+                    const tmpIn = createTemp('mp4');
+                    const tmpOut = tmpIn.replace('.mp4', '_out.mp4');
+
+                    try {
+                        const buffer = await q.download();
+                        fs.writeFileSync(tmpIn, buffer);
+                        await toGif(tmpIn, tmpOut);
+
+                        await sock.sendMessage(m.from, { 
+                            video: fs.readFileSync(tmpOut), 
+                            gifPlayback: true 
+                        }, { quoted: m });
+                        await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
+                    } catch (e) { 
+                        console.error('[CONV_GIF_ERR]', e);
+                        await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                        await m.reply(res.error); 
+                    } finally {
+                        cleanup(tmpIn);
+                        cleanup(tmpOut);
+                    }
                 }
                 break;
             }
@@ -139,6 +247,51 @@ export default {
                 } finally {
                     cleanup(tmpIn);
                     cleanup(tmpOut);
+                }
+                break;
+            }
+
+            // ==========================================
+            // FLAG: --tourl / --tolink
+            // ==========================================
+            case '--tourl':
+            case '--tolink': {
+                await sock.sendMessage(m.from, { react: { text: '⏳', key: m.key } });
+
+                try {
+                    const buffer = await q.download();
+
+                    let ext = 'bin';
+                    if (/image\/jpeg/.test(mime)) ext = 'jpg';
+                    else if (/image\/png/.test(mime)) ext = 'png';
+                    else if (/image\/webp/.test(mime)) ext = 'webp';
+                    else if (/image\/gif/.test(mime)) ext = 'gif';
+                    else if (/video/.test(mime)) ext = 'mp4';
+                    else if (/audio\/mpeg/.test(mime)) ext = 'mp3';
+                    else if (/audio\/ogg/.test(mime)) ext = 'ogg';
+                    else if (/audio/.test(mime)) ext = 'mp3';
+                    else if (/pdf/.test(mime)) ext = 'pdf';
+
+                    const filename = `upload_${Date.now()}.${ext}`;
+
+                    let url;
+                    try {
+                        url = await uploadToCatbox(buffer, filename);
+                    } catch (e) {
+                        url = await uploadToTmpfiles(buffer, filename);
+                    }
+
+                    if (!url) {
+                        await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                        return m.reply('❌ Gagal mengupload media.');
+                    }
+
+                    await m.reply(`✅ *Upload Berhasil*\n\n> ${url}`);
+                    await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
+                } catch (e) {
+                    console.error('[CONV_URL_ERR]', e);
+                    await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                    await m.reply(res.error);
                 }
                 break;
             }

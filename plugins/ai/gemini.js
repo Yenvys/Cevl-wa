@@ -44,12 +44,15 @@ async function saveHistory(id, history) {
 }
 
 function getQuotedText(q) {
-    const msg = q?.msg || q;
-
+    if (!q) return "";
     return (
-        msg?.conversation ||
-        msg?.extendedTextMessage?.text ||
-        msg?.text ||
+        q.text ||
+        q.body ||
+        q.msg?.text ||
+        q.msg?.conversation ||
+        q.msg?.extendedTextMessage?.text ||
+        q.message?.conversation ||
+        q.message?.extendedTextMessage?.text ||
         ""
     );
 }
