@@ -1,5 +1,5 @@
 /**
- * lib/helper.js
+ * src/helper.js
  * Core System Media & Socket Wrapper for Yenvy Bot Engine
  */
 // FORMAT SUCI ES6 IMPORT SESUAI DOKUMENTASI RESMI BAILEYS 2026

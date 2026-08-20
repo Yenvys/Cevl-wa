@@ -11,7 +11,7 @@ import path from 'path';
 import os from 'os';
 import { prepareWAMessageMedia } from 'baileys';
 import { config } from '../../config.js';
-import { res } from '../../lib/response.js';
+import { res } from '../../src/response.js';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 

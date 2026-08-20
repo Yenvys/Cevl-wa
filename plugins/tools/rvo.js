@@ -7,7 +7,7 @@ import { downloadContentFromMessage } from 'baileys';
 import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import path from 'node:path';
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 export default {

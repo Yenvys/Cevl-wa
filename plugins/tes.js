@@ -1,11 +1,11 @@
-import { res } from '../lib/response.js';
+import { res } from '../src/response.js';
 
 /**
  * plugins/debugtombol.js
  * Command Tools buat memberondong chat dengan semua jenis tombol fungsional
  */
 
-import { sendButton } from '../lib/button.js';
+import { sendButton } from '../src/button.js';
 
 export default {
     cmd: ['btn'],

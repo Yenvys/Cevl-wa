@@ -1,5 +1,5 @@
 /**
- * lib/rpg/schema.js
+ * src/rpg/schema.js
  * Drop-in replacement for Mongoose UserRPG model using JSON
  */
 import fs from 'fs';

@@ -1,5 +1,5 @@
 /**
- * lib/rpg/jobs.js
+ * src/rpg/jobs.js
  * Kumpulan data static pekerjaan, nominal gaji, kuis interview, dan task harian RPG
  * Format: ESM (Modern Export/Import Engine)
  */

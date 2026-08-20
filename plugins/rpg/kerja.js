@@ -1,6 +1,6 @@
-import UserRPG from '../../lib/rpg/schema.js';
-import { jobs } from '../../lib/rpg/jobs.js';
-import { refreshUser, formatYen, checkLevelUp } from '../../lib/rpg/core.js';
+import UserRPG from '../src/rpg/schema.js';
+import { jobs } from '../src/rpg/jobs.js';
+import { refreshUser, formatYen, checkLevelUp } from '../src/rpg/core.js';
 
 export default {
     cmd: ['kerja', 'work'],

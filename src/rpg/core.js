@@ -1,5 +1,5 @@
 /**
- * lib/rpg/core.js
+ * src/rpg/core.js
  * Logic utama ekonomi, leveling, dan regenerasi.
  */
 

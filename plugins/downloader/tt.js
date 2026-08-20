@@ -11,7 +11,7 @@ import { config } from '../../config.js';
 const execPromise = util.promisify(exec);
 
 import axios from 'axios';
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 async function savetikScrape(url) {

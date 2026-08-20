@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../../config.js';
-import { getLidMapping } from '../../lib/database.js';
-import { sendMultiContact } from '../../lib/helper.js';
-import { res } from '../../lib/response.js';
+import { getLidMapping } from '../src/database.js';
+import { sendMultiContact } from '../src/helper.js';
+import { res } from '../src/response.js';
 
 
 export default {

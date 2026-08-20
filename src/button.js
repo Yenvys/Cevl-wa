@@ -1,7 +1,7 @@
 import { generateWAMessageFromContent, proto } from 'baileys';
 
 /**
- * lib/button.js
+ * src/button.js
  * Multi-Button Interactive Engine (Bypass Sanksi Meta)
  * Menyatukan Quick Reply, CTA URL, CTA Copy, dan Single Select List dalam 1 Layout
  */

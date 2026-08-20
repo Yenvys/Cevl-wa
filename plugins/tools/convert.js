@@ -3,13 +3,13 @@
  * Utilitas konversi tipe data berkas media dengan Flag Parameter (Universal Chat Style)
  */
 
-import { getMedia, createTemp, cleanup, toGif, toMp3, stickerToImage, convertToMp4 } from '../../lib/helper.js';
+import { getMedia, createTemp, cleanup, toGif, toMp3, stickerToImage, convertToMp4 } from '../../src/helper.js';
 import fs from 'node:fs';
 import axios from 'axios';
 import FormData from 'form-data';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import { res } from '../../lib/response.js';
+import { res } from '../../src/response.js';
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -104,7 +104,7 @@ export default {
                         cleanup(tmpIn);
                         cleanup(tmpOut);
                     }
-                // Video/GIF → MP4
+                    // Video/GIF → MP4
                 } else {
                     try {
                         const buffer = await q.download();
@@ -112,10 +112,10 @@ export default {
 
                         await sock.sendMessage(m.from, { video: mp4Buffer }, { quoted: m });
                         await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                    } catch (e) { 
+                    } catch (e) {
                         console.error('[CONV_MP4_ERR]', e);
                         await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                        await m.reply(res.error); 
+                        await m.reply(res.error);
                     }
                 }
                 break;
@@ -165,7 +165,7 @@ export default {
                         cleanup(tmpIn);
                         cleanup(tmpOut);
                     }
-                // Video → GIF
+                    // Video → GIF
                 } else {
                     const tmpIn = createTemp('mp4');
                     const tmpOut = tmpIn.replace('.mp4', '_out.mp4');
@@ -175,15 +175,15 @@ export default {
                         fs.writeFileSync(tmpIn, buffer);
                         await toGif(tmpIn, tmpOut);
 
-                        await sock.sendMessage(m.from, { 
-                            video: fs.readFileSync(tmpOut), 
-                            gifPlayback: true 
+                        await sock.sendMessage(m.from, {
+                            video: fs.readFileSync(tmpOut),
+                            gifPlayback: true
                         }, { quoted: m });
                         await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                    } catch (e) { 
+                    } catch (e) {
                         console.error('[CONV_GIF_ERR]', e);
                         await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                        await m.reply(res.error); 
+                        await m.reply(res.error);
                     } finally {
                         cleanup(tmpIn);
                         cleanup(tmpOut);
@@ -204,15 +204,15 @@ export default {
                     const buffer = await q.download();
                     const imageBuffer = await stickerToImage(buffer);
 
-                    await sock.sendMessage(m.from, { 
+                    await sock.sendMessage(m.from, {
                         image: imageBuffer,
                         mimetype: 'image/png'
                     }, { quoted: m });
                     await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                } catch (e) { 
+                } catch (e) {
                     console.error('[CONV_IMG_ERR]', e);
                     await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    await m.reply(res.error); 
+                    await m.reply(res.error);
                 }
                 break;
             }
@@ -234,16 +234,16 @@ export default {
                     fs.writeFileSync(tmpIn, buffer);
                     await toMp3(tmpIn, tmpOut);
 
-                    await sock.sendMessage(m.from, { 
-                        audio: fs.readFileSync(tmpOut), 
+                    await sock.sendMessage(m.from, {
+                        audio: fs.readFileSync(tmpOut),
                         mimetype: 'audio/mpeg',
                         fileName: `audio.mp3`
                     }, { quoted: m });
                     await sock.sendMessage(m.from, { react: { text: '', key: m.key } });
-                } catch (e) { 
+                } catch (e) {
                     console.error('[CONV_MP3_ERR]', e);
                     await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    await m.reply(res.error); 
+                    await m.reply(res.error);
                 } finally {
                     cleanup(tmpIn);
                     cleanup(tmpOut);

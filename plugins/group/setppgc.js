@@ -3,8 +3,8 @@
  * Mengubah foto profil grup (Universal Chat Style)
  */
 
-import { getMedia } from '../../lib/helper.js';
-import { res } from '../../lib/response.js';
+import { getMedia } from '../src/helper.js';
+import { res } from '../src/response.js';
 
 
 export default {

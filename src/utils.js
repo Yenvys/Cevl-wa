@@ -1,5 +1,5 @@
 /**
- * lib/utils.js
+ * src/utils.js
  */
 
 export const Tools = {

@@ -1,5 +1,5 @@
 /**
- * lib/logger.js
+ * src/logger.js
  */
 
 const originLog = console.log;

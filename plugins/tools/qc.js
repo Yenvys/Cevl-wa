@@ -4,8 +4,8 @@
  */
 
 import axios from 'axios';
-import { res } from '../../lib/response.js';
-import db from '../../lib/database.js';
+import { res } from '../src/response.js';
+import db from '../src/database.js';
 
 export default {
     cmd: ['qc', 'quote'],

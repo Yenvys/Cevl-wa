@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 const prFile = path.join(process.cwd(), 'data', 'tugas', 'pr_list.json');

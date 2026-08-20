@@ -1,5 +1,5 @@
-import UserRPG from '../../lib/rpg/schema.js';
-import { res } from '../../lib/response.js';
+import UserRPG from '../src/rpg/schema.js';
+import { res } from '../src/response.js';
 
 export default {
     cmd: ['resign', 'berhenti'],

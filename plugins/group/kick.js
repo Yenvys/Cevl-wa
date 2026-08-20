@@ -3,8 +3,8 @@
  * Mengeluarkan anggota dari dalam grup (Universal Chat Style)
  */
 
-import db from '../../lib/database.js';
-import { res } from '../../lib/response.js';
+import db from '../src/database.js';
+import { res } from '../src/response.js';
 
 
 export default {

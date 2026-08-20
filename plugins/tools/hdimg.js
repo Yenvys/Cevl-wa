@@ -6,7 +6,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import FormData from 'form-data';
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 /**

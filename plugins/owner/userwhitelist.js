@@ -1,5 +1,5 @@
-import { getWhitelistedUsers, updateUserWhitelist } from '../../lib/database.js';
-import { res } from '../../lib/response.js';
+import { getWhitelistedUsers, updateUserWhitelist } from '../src/database.js';
+import { res } from '../src/response.js';
 
 export default {
     cmd: ['userwhitelist', 'uwl'],

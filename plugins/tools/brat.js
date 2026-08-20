@@ -10,8 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { tmpdir } from 'os';
-import { convertToStickerWebp, cleanup } from '../../lib/helper.js';
-import { res } from '../../lib/response.js';
+import { convertToStickerWebp, cleanup } from '../src/helper.js';
+import { res } from '../src/response.js';
 
 
 export default {

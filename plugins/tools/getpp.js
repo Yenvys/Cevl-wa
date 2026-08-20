@@ -1,4 +1,4 @@
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 /**
  * plugins/tools/getpp.js

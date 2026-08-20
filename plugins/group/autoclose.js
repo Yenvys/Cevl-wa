@@ -3,8 +3,8 @@
  * Manajemen & Scheduler Otomatis Penutupan Jam Malam Grup
  */
 
-import { updateGroupSettings, getAutoCloseGroups } from '../../lib/database.js';
-import { res } from '../../lib/response.js';
+import { updateGroupSettings, getAutoCloseGroups } from '../src/database.js';
+import { res } from '../src/response.js';
 
 export default {
     cmd: ['autoclose', 'ac'],

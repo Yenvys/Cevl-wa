@@ -3,7 +3,7 @@ export const config = {
         "62..."
     ],
     "ownerName": "Yenvys",
-    "botName": "Cel",
+    "botName": "Cevl",
     "prefix": [".", "/"],
     "mode": "self", // Otomatis public pas bot baru online (Opsi: public/self/group/private)
     "geminiModel": "gemini-3-flash-preview"

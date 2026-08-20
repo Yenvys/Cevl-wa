@@ -1,6 +1,6 @@
 import axios from "axios";
 import { downloadMediaMessage } from "baileys";
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 const MIME_MAP = {

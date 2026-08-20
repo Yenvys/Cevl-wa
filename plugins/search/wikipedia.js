@@ -4,7 +4,7 @@
  */
 
 import fetch from 'node-fetch';
-import { res } from '../../lib/response.js';
+import { res } from '../src/response.js';
 
 
 export default {

@@ -1,5 +1,5 @@
 /**
- * lib/client.js
+ * src/client.js
  */
 import {
   DisconnectReason,

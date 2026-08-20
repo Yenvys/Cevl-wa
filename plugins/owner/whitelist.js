@@ -3,8 +3,8 @@
  * Manajemen hak izin whitelisting grup agar dapat menggunakan bot (Universal Chat Style)
  */
 
-import { getWhitelistedGroups, updateGroupSettings } from '../../lib/database.js';
-import { res } from '../../lib/response.js';
+import { getWhitelistedGroups, updateGroupSettings } from '../src/database.js';
+import { res } from '../src/response.js';
 
 
 export default {

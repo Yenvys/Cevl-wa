@@ -5,10 +5,10 @@ import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { startSock } from './lib/client.js';
-import { Handler } from './lib/handler.js';
-import { Logger } from './lib/logger.js';
-import { store } from './lib/helper.js';
+import { startSock } from './src/client.js';
+import { Handler } from './src/handler.js';
+import { Logger } from './src/logger.js';
+import { store } from './src/helper.js';
 import { listenAlertSchedule } from './plugins/class/alert.js';
 
 const customTemp = path.join(process.cwd(), 'data', 'tmp');

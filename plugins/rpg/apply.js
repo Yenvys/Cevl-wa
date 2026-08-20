@@ -1,10 +1,10 @@
 /**
  * plugins/rpg/apply.js
  */
-import UserRPG from '../../lib/rpg/schema.js';
-import { jobs } from '../../lib/rpg/jobs.js';
-import { sendButton } from '../../lib/button.js';
-import { res } from '../../lib/response.js';
+import UserRPG from '../src/rpg/schema.js';
+import { jobs } from '../src/rpg/jobs.js';
+import { sendButton } from '../src/button.js';
+import { res } from '../src/response.js';
 
 
 const parseState = (raw) => {
