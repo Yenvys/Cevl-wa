@@ -52,5 +52,33 @@ Sebelum menginstal bot ini, pastikan sistem Anda memiliki:
 
 ##  Struktur Folder
 - `/plugins/`: Menyimpan semua modul fitur (commands). Tambah file `.js` baru di sini dan bot langsung memuat secara otomatis!
-- `/lib/`: Library inti, database (SQLite), response handling, dan middleware.
+- `/src/`: Library inti, database (SQLite), response handling, dan middleware.
 - `/data/`: Menyimpan database lokal, file sesi login, dan pengaturan global. 
+
+##  Cara Menambahkan Command Baru (Plugin)
+
+Bot ini menggunakan arsitektur berbasis plugin. Untuk menambahkan command baru, Anda cukup membuat file `.js` baru di dalam direktori `/plugins/` atau sub-direktorinya (contoh: `/plugins/tools/namacommand.js`).
+
+format (template) untuk membuat command baru:
+
+```javascript
+export default {
+    cmd: ['namacommand', 'alias1'], // Array berisi command utama dan aliasnya
+    category: 'kategori', // Kategori command (contoh: 'tools', 'search', 'games')
+    desc: 'Deskripsi singkat tentang fitur ini', // Ditampilkan saat user mengetik .menu
+    exec: async (m, { sock, query, command }) => {
+        // Tulis logika command Anda di sini
+        
+        // Contoh: mengecek jika user tidak mengirim teks/query
+        if (!query) {
+            return m.reply(`*Format salah!*\nPenggunaan: .${command} <teks>`);
+        }
+        
+        // Contoh: bot membalas pesan user
+        await m.reply(`Command ${command} berhasil dijalankan dengan input: ${query}`);
+    }
+};
+```
+
+**Catatan Tambahan:**
+Berkat fitur **Hot Reload**, Anda **tidak perlu merestart bot** (`npm start`) saat menambahkan, menghapus, atau mengedit file plugin. Semua perubahan akan langsung diterapkan secara instan!
