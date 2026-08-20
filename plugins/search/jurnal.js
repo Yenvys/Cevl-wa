@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 export default {

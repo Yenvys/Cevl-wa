@@ -1,4 +1,4 @@
-import { getMedia } from '../src/helper.js';
+import { getMedia } from '../../src/helper.js';
 
 export default {
     cmd: ['setpp'],

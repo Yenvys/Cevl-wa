@@ -4,7 +4,7 @@
  */
 
 import { downloadMediaMessage } from 'baileys';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 export default {

@@ -1,4 +1,4 @@
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 /**
  * plugins/system/mode.js

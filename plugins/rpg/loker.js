@@ -1,5 +1,5 @@
-import { jobs } from '../src/rpg/jobs.js';
-import { formatYen } from '../src/rpg/core.js';
+import { jobs } from '../../src/rpg/jobs.js';
+import { formatYen } from '../../src/rpg/core.js';
 
 export default {
     cmd: ['bursakerja', 'loker', 'joblist'],

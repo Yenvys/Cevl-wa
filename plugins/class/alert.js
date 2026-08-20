@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 const prFile = path.join(process.cwd(), 'data', 'tugas', 'pr_list.json');

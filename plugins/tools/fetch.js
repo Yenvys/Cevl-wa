@@ -6,8 +6,8 @@
 import fetch from 'node-fetch';
 import path from 'node:path';
 import fs from 'node:fs';
-import { convertToMp4 } from '../src/helper.js';
-import { res } from '../src/response.js';
+import { convertToMp4 } from '../../src/helper.js';
+import { res } from '../../src/response.js';
 
 
 export default {

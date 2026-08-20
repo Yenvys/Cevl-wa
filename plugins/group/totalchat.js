@@ -1,5 +1,5 @@
-import { res } from '../src/response.js';
-import { getGroupMessages } from '../src/database.js';
+import { res } from '../../src/response.js';
+import { getGroupMessages } from '../../src/database.js';
 
 export default {
     cmd: ['totalchat', 'tc', 'topchat'],

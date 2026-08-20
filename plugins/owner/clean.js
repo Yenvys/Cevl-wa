@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import { res } from '../src/response.js';
-import UserRPG from '../src/rpg/schema.js';
+import { res } from '../../src/response.js';
+import UserRPG from '../../src/rpg/schema.js';
 
 
 const HISTORY_DIR = "./data/history";

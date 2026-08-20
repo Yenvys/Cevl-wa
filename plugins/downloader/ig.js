@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 import { config } from '../../config.js';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 async function cloudHostIG(url) {

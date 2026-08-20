@@ -3,7 +3,7 @@
  * Menampilkan daftar menu perintah bot (Universal Chat Style)
  */
 import { config } from '../../config.js';
-import { sendButton } from '../src/button.js';
+import { sendButton } from '../../src/button.js';
 
 const getGreeting = () => {
     const hour = parseInt(new Date().toLocaleTimeString('id-ID', {

@@ -2,7 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import zlib from "zlib";
 import { config } from "../../config.js";
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 async function fbDownloader(url) {

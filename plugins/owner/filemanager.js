@@ -7,7 +7,7 @@ import { readdir, mkdir, writeFile, unlink, readFile, rm } from "node:fs/promise
 import { join, resolve, basename, dirname, relative, sep } from "node:path";
 import fs from "node:fs";
 import mimes from "mime-types";
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 const ROOT_DIR = join(process.cwd(), 'data', 'doc');

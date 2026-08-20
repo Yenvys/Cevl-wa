@@ -1,4 +1,4 @@
-import { setAfk } from '../src/database.js';
+import { setAfk } from '../../src/database.js';
 
 export default {
     cmd: ['afk'],

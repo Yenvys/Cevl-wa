@@ -1,7 +1,7 @@
 // plugins/downloader/pint.js
 
 import fetch from 'node-fetch';
-import { buildCarouselMessage, pickRandomPins } from '../src/helper.js';
+import { buildCarouselMessage, pickRandomPins } from '../../src/helper.js';
 
 const logger = {
     info: console.log,

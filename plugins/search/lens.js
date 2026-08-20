@@ -6,7 +6,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import { config } from '../../config.js';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 /**

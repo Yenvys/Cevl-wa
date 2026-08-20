@@ -10,7 +10,7 @@ import fs from "fs";
 import path from "path";
 import { tmpdir } from "os";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 async function downloadToFile(url, dest) {
     const writer = fs.createWriteStream(dest);

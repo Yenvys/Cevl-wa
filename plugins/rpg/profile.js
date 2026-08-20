@@ -1,6 +1,6 @@
-import UserRPG from '../src/rpg/schema.js';
-import { refreshUser, formatYen } from '../src/rpg/core.js';
-import { res } from '../src/response.js';
+import UserRPG from '../../src/rpg/schema.js';
+import { refreshUser, formatYen } from '../../src/rpg/core.js';
+import { res } from '../../src/response.js';
 
 
 export default {

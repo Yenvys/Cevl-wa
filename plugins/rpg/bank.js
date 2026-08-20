@@ -1,5 +1,5 @@
-import UserRPG from '../src/rpg/schema.js';
-import { formatYen } from '../src/rpg/core.js';
+import UserRPG from '../../src/rpg/schema.js';
+import { formatYen } from '../../src/rpg/core.js';
 
 export default {
     cmd: ['deposit', 'dp', 'withdraw', 'wd', 'tarik', 'nabung'],

@@ -1,6 +1,6 @@
-import { res } from '../src/response.js';
-import UserRPG from '../src/rpg/schema.js';
-import { formatYen } from '../src/rpg/core.js';
+import { res } from '../../src/response.js';
+import UserRPG from '../../src/rpg/schema.js';
+import { formatYen } from '../../src/rpg/core.js';
 
 const MARKET_ITEMS = {
     onigiri: { name: 'Onigiri', emoji: '🍙', type: 'food', stamina: 20 },

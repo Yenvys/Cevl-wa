@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../../config.js';
-import { res } from '../src/response.js';
+import { res } from '../../src/response.js';
 
 
 export default {

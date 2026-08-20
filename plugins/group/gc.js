@@ -3,8 +3,8 @@
  * Pusat Komando Manajemen Fitur Administrasi Grup (Universal Chat Style)
  */
 
-import { getGroupSettings, updateGroupSettings } from '../src/database.js';
-import { res } from '../src/response.js';
+import { getGroupSettings, updateGroupSettings } from '../../src/database.js';
+import { res } from '../../src/response.js';
 
 
 export default {

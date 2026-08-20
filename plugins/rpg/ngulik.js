@@ -1,5 +1,5 @@
-import UserRPG from '../src/rpg/schema.js';
-import { getCooldown, getRandom, checkLevelUp } from '../src/rpg/core.js';
+import UserRPG from '../../src/rpg/schema.js';
+import { getCooldown, getRandom, checkLevelUp } from '../../src/rpg/core.js';
 
 export default {
     cmd: ['ngulik', 'belajar'],
