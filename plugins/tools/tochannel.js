@@ -114,6 +114,7 @@ export default {
                 }
 
                 await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
+                return m.reply('✅ Media berhasil diteruskan ke saluran!');
             }
 
             // === TIPE TIDAK DIDUKUNG ===
