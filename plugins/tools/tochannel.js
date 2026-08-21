@@ -10,7 +10,7 @@ import { res } from '../../src/response.js';
 const NEWSLETTER_JID = '120363401731165846@newsletter';
 
 export default {
-    cmd: ['tochannel', 'tonewsletter', 'saluran', 'toch', 'togh'],
+    cmd: ['tochannel', 'tch', 'saluran', 'toch'],
     category: 'tools',
     desc: 'Meneruskan pesan/media ke saluran (newsletter). Reply pesan yang ingin diteruskan dengan perintah ini. Bot harus admin di saluran.',
     exec: async (m, { sock, command }) => {
@@ -114,22 +114,21 @@ export default {
                 }
 
                 await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
-                return m.reply('✅ Media berhasil diteruskan ke saluran!');
             }
 
             // === TIPE TIDAK DIDUKUNG ===
             await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-            return m.reply('❌ Tipe pesan ini tidak didukung untuk diteruskan ke saluran.');
+            return m.reply('Tipe pesan ini tidak didukung untuk diteruskan ke saluran.');
 
         } catch (err) {
             console.error('[TOCHANNEL_ERR]', err);
             await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
 
             if (err.message?.includes('not-authorized') || err.message?.includes('403')) {
-                return m.reply('❌ Bot bukan admin di saluran tujuan! Pastikan bot sudah menjadi admin di saluran.');
+                return m.reply('Bot bukan admin di saluran tujuan! Pastikan bot sudah menjadi admin di saluran.');
             }
 
-            return m.reply('❌ Gagal meneruskan ke saluran. ' + (err.message || ''));
+            return m.reply('Gagal meneruskan ke saluran. ' + (err.message || ''));
         }
     }
 };
