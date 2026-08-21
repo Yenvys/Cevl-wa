@@ -2,9 +2,13 @@
  * plugins/tools/tochannel.js
  * Forward messages/media to WhatsApp Newsletter Channel
  * Bot harus menjadi admin di saluran target agar bisa mengirim pesan.
+ * 
+ * CATATAN: Pengiriman media ke saluran saat ini terbatas karena bug di Baileys.
+ * Hanya teks yang berhasil terkirim. Media (gambar/video/audio/stiker) akan
+ * otomatis dikonversi ke teks/caption jika memungkinkan.
+ * Ref: https://github.com/WhiskeySockets/Baileys/issues/2199
  */
 
-import { downloadMediaMessage } from 'baileys';
 import { res } from '../../src/response.js';
 
 const NEWSLETTER_JID = '120363401731165846@newsletter';
@@ -12,17 +16,17 @@ const NEWSLETTER_JID = '120363401731165846@newsletter';
 export default {
     cmd: ['tochannel', 'tch', 'saluran', 'toch'],
     category: 'tools',
-    desc: 'Meneruskan pesan/media ke saluran (newsletter). Reply pesan yang ingin diteruskan dengan perintah ini. Bot harus admin di saluran.',
+    desc: 'Meneruskan pesan ke saluran (newsletter). Reply pesan yang ingin diteruskan. Saat ini hanya teks/caption yang didukung.',
     exec: async (m, { sock, command }) => {
         // Harus reply pesan
         if (!m.quoted) {
             return m.reply(
                 `*♯ Cara Penggunaan*\n\n` +
-                `Reply pesan (teks/gambar/video/audio/stiker/dokumen) yang ingin diteruskan ke saluran dengan:\n` +
+                `Reply pesan yang ingin diteruskan ke saluran dengan:\n` +
                 `> ${m.prefix}${command}\n\n` +
                 `Opsional: tambahkan caption kustom\n` +
-                `> ${m.prefix}${command} caption teks kamu\n\n` +
-                `_Bot harus menjadi admin di saluran tujuan._`
+                `> ${m.prefix}${command} teks kamu\n\n` +
+                `⚠️ _Saat ini hanya teks/caption yang bisa dikirim ke saluran. Media (gambar/video/audio) belum didukung oleh library Baileys._`
             );
         }
 
@@ -32,94 +36,45 @@ export default {
             const quoted = m.quoted;
             const quotedType = quoted.type || '';
             const quotedMsg = quoted.msg || quoted;
-            const mime = quotedMsg?.mimetype || '';
             const customCaption = m.query || '';
 
-            // === TEKS BIASA ===
+            // Ambil teks dari pesan yang di-reply
+            let text = '';
+
             if (quotedType === 'conversation' || quotedType === 'extendedTextMessage') {
-                const text = quoted.text || quotedMsg?.text || '';
-                if (!text) {
-                    await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    return m.reply('❌ Pesan teks kosong, tidak ada yang bisa diteruskan.');
-                }
-
-                const finalText = customCaption
-                    ? `${customCaption}\n\n${text}`
-                    : text;
-
-                await sock.sendMessage(NEWSLETTER_JID, { text: finalText });
-
-                await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
-                return m.reply('✅ Pesan teks berhasil diteruskan ke saluran!');
+                // Pesan teks biasa
+                text = quoted.text || quotedMsg?.text || '';
+            } else if (['imageMessage', 'videoMessage'].includes(quotedType)) {
+                // Ambil caption dari media
+                text = quotedMsg?.caption || quoted.text || '';
+            } else if (quotedType === 'documentMessage' || quotedType === 'documentWithCaptionMessage') {
+                text = quotedMsg?.caption || quoted.text || '';
             }
 
-            // === MEDIA (image, video, audio, sticker, document) ===
-            if (mime || ['imageMessage', 'videoMessage', 'audioMessage', 'stickerMessage', 'documentMessage', 'documentWithCaptionMessage'].includes(quotedType)) {
-                const buffer = await downloadMediaMessage(
-                    {
-                        key: { id: quoted.id, remoteJid: m.from, participant: quoted.participant },
-                        message: quoted.message || quoted
-                    },
-                    'buffer',
-                    {},
-                    { logger: { info: () => { }, error: () => { }, warn: () => { }, debug: () => { } } }
+            // Jika ada custom caption, gunakan itu
+            if (customCaption) {
+                text = text ? `${customCaption}\n\n${text}` : customCaption;
+            }
+
+            if (!text) {
+                await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
+                return m.reply(
+                    '❌ Tidak ada teks/caption yang bisa diteruskan.\n\n' +
+                    '_Pengiriman media (gambar/video/audio/stiker) ke saluran belum didukung oleh Baileys._\n' +
+                    '_Kamu bisa reply pesan teks atau media yang memiliki caption._'
                 );
-
-                if (!buffer) {
-                    await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-                    return m.reply('❌ Gagal mengunduh media. Coba lagi.');
-                }
-
-                const originalCaption = quoted.text || quotedMsg?.caption || '';
-                const caption = customCaption || originalCaption;
-
-                // Kirim berdasarkan tipe media
-                if (/image/.test(mime) || quotedType === 'imageMessage') {
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        image: buffer,
-                        caption: caption || undefined
-                    });
-                } else if (/video/.test(mime) || quotedType === 'videoMessage') {
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        video: buffer,
-                        caption: caption || undefined,
-                        mimetype: mime || 'video/mp4'
-                    });
-                } else if (/audio/.test(mime) || quotedType === 'audioMessage') {
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        audio: buffer,
-                        mimetype: mime || 'audio/mpeg',
-                        ptt: quotedMsg?.ptt || false
-                    });
-                } else if (/webp/.test(mime) || quotedType === 'stickerMessage') {
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        sticker: buffer
-                    });
-                } else if (quotedType === 'documentMessage' || quotedType === 'documentWithCaptionMessage') {
-                    const fileName = quotedMsg?.fileName || 'file';
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        document: buffer,
-                        mimetype: mime || 'application/octet-stream',
-                        fileName: fileName,
-                        caption: caption || undefined
-                    });
-                } else {
-                    // Fallback: kirim sebagai dokumen
-                    await sock.sendMessage(NEWSLETTER_JID, {
-                        document: buffer,
-                        mimetype: mime || 'application/octet-stream',
-                        fileName: `forwarded_${Date.now()}`,
-                        caption: caption || undefined
-                    });
-                }
-
-                await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
-                return m.reply('✅ Media berhasil diteruskan ke saluran!');
             }
 
-            // === TIPE TIDAK DIDUKUNG ===
-            await sock.sendMessage(m.from, { react: { text: '❌', key: m.key } });
-            return m.reply('Tipe pesan ini tidak didukung untuk diteruskan ke saluran.');
+            await sock.sendMessage(NEWSLETTER_JID, { text });
+
+            await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
+
+            // Info tambahan jika pesan asli adalah media
+            if (!['conversation', 'extendedTextMessage'].includes(quotedType)) {
+                return m.reply('✅ Caption berhasil diteruskan ke saluran!\n\n_⚠️ Media (gambar/video/audio) belum bisa dikirim ke saluran karena keterbatasan library._');
+            }
+
+            return m.reply('✅ Pesan teks berhasil diteruskan ke saluran!');
 
         } catch (err) {
             console.error('[TOCHANNEL_ERR]', err);
