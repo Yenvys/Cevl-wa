@@ -10,16 +10,46 @@ import { Handler } from './src/handler.js';
 import { Logger } from './src/logger.js';
 import { store } from './src/helper.js';
 import { listenAlertSchedule } from './plugins/class/alert.js';
+import { backupDatabase } from './src/database.js';
 
 const customTemp = path.join(process.cwd(), 'data', 'tmp');
 if (!fs.existsSync(customTemp)) {
   fs.mkdirSync(customTemp, { recursive: true });
+} else {
+  // Startup cleanup: hapus sisa temp file dari session sebelumnya
+  try {
+    const tmpFiles = fs.readdirSync(customTemp);
+    if (tmpFiles.length > 0) {
+      for (const file of tmpFiles) {
+        try { fs.unlinkSync(path.join(customTemp, file)); } catch { }
+      }
+      console.log(`[STARTUP] Cleaned ${tmpFiles.length} temp file(s) from data/tmp/`);
+    }
+  } catch { }
 }
 
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
 os.tmpdir = () => customTemp;
+
+// Validasi .env keys saat startup
+const envValidation = [
+  { key: 'GEMINI_API_KEY', required: true, label: 'Google Gemini API' },
+  { key: 'SERPAPI_KEY', required: false, label: 'SerpAPI' },
+  { key: 'WOLFRAM_APPID', required: false, label: 'Wolfram Alpha' },
+  { key: 'PINTEREST_AUTH_COOKIE', required: false, label: 'Pinterest' },
+];
+
+for (const { key, required, label } of envValidation) {
+  if (!process.env[key]) {
+    if (required) {
+      console.error(`\x1b[1;31m[ENV ERROR]\x1b[0m ${label} (${key}) tidak ditemukan! Beberapa fitur tidak akan bekerja.`);
+    } else {
+      console.warn(`\x1b[1;33m[ENV WARN]\x1b[0m ${label} (${key}) kosong — fitur terkait akan dinonaktifkan.`);
+    }
+  }
+}
 
 const storeFilePath = path.join(process.cwd(), 'data', 'store.json');
 
@@ -61,6 +91,14 @@ async function main() {
         console.error('[STORE_SAVE_ERR]', e.message);
       }
     }, 300000);
+
+    // Auto-backup database setiap 24 jam
+    const runBackup = () => {
+      const result = backupDatabase();
+      if (result) log.info(`Database backup berhasil: ${result}`);
+    };
+    runBackup(); // Backup saat startup
+    setInterval(runBackup, 1000 * 60 * 60 * 24);
 
   } catch (error) {
     log.error('MAIN_STARTUP', `Koneksi gagal: ${error.message}`);

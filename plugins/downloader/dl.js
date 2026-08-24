@@ -20,8 +20,17 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const CLOUDINARY_IMAGE = 'https://files.catbox.moe/r5qcku.jpg';
 const NEWSLETTER_JID = '120363401731165846@newsletter';
 
-// Global cache for download selections
+// Global cache for download selections (with auto-cleanup)
 if (!global.dlCache) global.dlCache = {};
+if (!global.dlCacheCleanupStarted) {
+    global.dlCacheCleanupStarted = true;
+    setInterval(() => {
+        const now = Date.now();
+        for (const [key, val] of Object.entries(global.dlCache)) {
+            if (now - (val?.timestamp || 0) > 600000) delete global.dlCache[key]; // 10 menit
+        }
+    }, 300000); // cek setiap 5 menit
+}
 
 // Extract audio from video URL using ffmpeg
 async function extractAudioFromVideo(videoUrl) {

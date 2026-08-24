@@ -1,84 +1,142 @@
-# Cevl Bot WhatsApp
+# Cevl — WhatsApp Bot
 
-Cevl adalah Simple bot WhatsApp yang ditulis dalam NodeJS menggunakan library Baileys. struktur *plugin-based* yang dinamis (Universal Chat Style) memungkinkan perubahan, penambahan, dan penghapusan fitur tanpa merestart bot (Hot Reload).
+Cevl adalah bot WhatsApp multi-fitur yang ditulis dalam Node.js menggunakan library **Baileys**. Arsitektur *plugin-based* yang dinamis memungkinkan penambahan, penghapusan, dan pengeditan fitur tanpa merestart bot (**Hot Reload**).
 
-##  Fitur Utama
-- **Plugin Dinamis**: File plugin otomatis dimuat ulang jika ada perubahan (`chokidar` auto-watch).
-- **Mode Fleksibel**: Dapat berjalan di mode Publik, Self, atau Grup-only (`.mode`).
-- **AI Integrasi**: Didukung oleh Google Gemini (`.ai`).
-- **Downloader**: YouTube, TikTok, Threads, Instagram, dll.
-- **Manajemen Grup**: Autoclose (jam malam otomatis), Antilink, Welcome & Goodbye messages.
-- **Roleplay / RPG Sistem**: Uang, Inventory, Leveling, Market.
-- **Koneksi Stabil**: Mendukung koneksi menggunakan metode Pairing Code.
+## ✨ Fitur Utama
 
-## Persyaratan (Requirements)
-Sebelum menginstal bot ini, pastikan sistem Anda memiliki:
-- **Node.js** (Gunakan versi LTS: v18, v20, atau v22. *Jangan gunakan versi terbaru jika mengalami error saat `npm install`*)
+| Kategori | Fitur |
+|----------|-------|
+| **AI** | Google Gemini integration (`.ai`) |
+| **Downloader** | YouTube, TikTok, Instagram, Threads, Facebook, Twitter/X, dll |
+| **Grup** | Autoclose, Antilink, Welcome & Goodbye, Leaderboard |
+| **RPG** | Uang, Inventory, Leveling, Market |
+| **Tools** | Sticker maker, Image search, Pinterest, Calculator |
+| **Owner** | Eval, Exec, Mode, Prefix, Whitelist management |
+| **Sistem** | Plugin hot reload, Rate limiting, Auto-backup database |
+
+## 📋 Persyaratan
+
+- **Node.js** v18+ (LTS recommended: v20 atau v22)
 - **Git**
-- **FFmpeg** (opsional, disarankan untuk fitur manipulasi media)
+- **FFmpeg** (diperlukan untuk fitur media — sticker, audio conversion, dll)
 
-##  Cara Instalasi
+## 🚀 Cara Instalasi
 
-1. **Clone repository ini:**
-   ```bash
-   git clone https://github.com/Yenvys/Cevl-wa.git
-   cd Cevl-wa
-   ```
+### 1. Clone & Install
 
-2. **Instal dependensi:**
-   ```bash
-   npm install
-   ```
+```bash
+git clone https://github.com/Yenvys/bot-wa.git
+cd bot-wa
+npm install
+```
 
-3. **Konfigurasi Environment (`.env`):**
-   Copy file `.env.example` dan ubah namanya jadi `.env`.
-   Lalu isi (API, Owner & Pairing):
-   ```env
-   OWNER_NUMBERS=628...
-   PAIRING_NUMBER=628...
-   GEMINI_API_KEY=...
-   ....
-   ```
+### 2. Konfigurasi Environment
 
-4. **Jalankan Bot:**
-   ```bash
-   npm start
-   ```
+```bash
+cp .env.example .env
+```
 
-##  Panduan Penggunaan
-- Saat pertama kali berjalan, bot akan memunculkan *Pairing Code* di terminal jika `PAIRING_NUMBER` sudah diatur di `.env`.
-- Buka aplikasi WhatsApp Anda > Tautkan Perangkat > Masukkan kode yang muncul di terminal.
-- Ketik `.menu` atau `.help` dalam chat WhatsApp untuk melihat seluruh daftar command yang tersedia.
+Edit file `.env` dan isi API keys:
 
-##  Struktur Folder
-- `/plugins/`: Menyimpan semua modul fitur (commands). Tambah file `.js` baru di sini dan bot langsung memuat secara otomatis!
-- `/src/`: Library inti, database (SQLite), response handling, dan middleware.
-- `/data/`: Menyimpan database lokal, file sesi login, dan pengaturan global. 
+```env
+GEMINI_API_KEY=your_gemini_api_key    # (Required) Google AI Studio
+PAIRING_NUMBER=628xxx                  # Nomor bot
+SERPAPI_KEY=xxx                        # (Optional) Search API
+WOLFRAM_APPID=xxx                      # (Optional) Wolfram Alpha
+PINTEREST_AUTH_COOKIE=xxx              # (Optional) Pinterest
+```
 
-##  Cara Menambahkan Command Baru (Plugin)
+### 3. Jalankan Bot
 
-Bot ini menggunakan arsitektur berbasis plugin. Untuk menambahkan command baru, Anda cukup membuat file `.js` baru di dalam direktori `/plugins/` atau sub-direktorinya (contoh: `/plugins/tools/namacommand.js`).
+```bash
+# Development (dengan auto-restart)
+npm run dev
 
-format (template) untuk membuat command baru:
+# Production
+npm start
+```
+
+Saat pertama kali berjalan, pilih metode login:
+1. **Pairing Code** — Masukkan nomor WA, lalu input kode di WhatsApp > Tautkan Perangkat
+2. **QR Code** — Scan QR code dari terminal
+
+## 🐳 Docker (Opsional)
+
+```bash
+docker build -t cevl-bot .
+docker run -d --name cevl --env-file .env -v ./data:/app/data cevl-bot
+```
+
+## ⚙️ PM2 — Production (Opsional)
+
+```bash
+npm install -g pm2
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+PM2 akan otomatis restart bot jika crash, dengan memory limit 500MB.
+
+## 📁 Struktur Folder
+
+```
+├── main.js              # Entry point
+├── config.js            # Konfigurasi bot (prefix, mode, owner)
+├── ecosystem.config.cjs # PM2 production config
+├── Dockerfile           # Docker deployment
+├── plugins/             # Semua command/fitur bot
+│   ├── ai/              # AI commands
+│   ├── downloader/      # Media downloader
+│   ├── general/         # Menu, info, ping
+│   ├── group/           # Group management
+│   ├── owner/           # Owner-only commands
+│   ├── rpg/             # RPG game system
+│   ├── search/          # Search engines
+│   ├── tools/           # Utility tools
+│   └── class/           # Class-based features
+├── src/                 # Core library
+│   ├── handler.js       # Plugin loader & message router
+│   ├── client.js        # Baileys socket & reconnect
+│   ├── serialize.js     # Message serializer
+│   ├── database.js      # SQLite database
+│   ├── helper.js        # Media processing & socket wrapper
+│   ├── button.js        # Interactive button builder
+│   ├── logger.js        # Colored console logger
+│   ├── response.js      # Standardized response messages
+│   └── utils.js         # Utility functions & middleware
+└── data/                # Runtime data (auto-generated)
+    ├── session_*/        # WhatsApp session
+    ├── db/               # SQLite database + backups
+    └── tmp/              # Temporary files
+```
+
+## 🔌 Cara Menambahkan Command Baru
+
+Buat file `.js` baru di `/plugins/` atau sub-direktorinya. Bot akan otomatis memuat tanpa restart!
 
 ```javascript
 export default {
-    cmd: ['namacommand', 'alias1'], // Array berisi command utama dan aliasnya
-    category: 'kategori', // Kategori command (contoh: 'tools', 'search', 'games')
-    desc: 'Deskripsi singkat tentang fitur ini', // Ditampilkan saat user mengetik .menu
+    cmd: ['namacommand', 'alias1'],
+    category: 'tools',
+    desc: 'Deskripsi fitur',
     exec: async (m, { sock, query, command }) => {
-        // Tulis logika command Anda di sini
-        
-        // Contoh: mengecek jika user tidak mengirim teks/query
         if (!query) {
-            return m.reply(`*Format salah!*\nPenggunaan: .${command} <teks>`);
+            return m.reply(`Format salah! Contoh: .${command} <teks>`);
         }
-        
-        // Contoh: bot membalas pesan user
-        await m.reply(`Command ${command} berhasil dijalankan dengan input: ${query}`);
+        await m.reply(`Hasil: ${query}`);
     }
 };
 ```
 
-**Catatan Tambahan:**
-Berkat fitur **Hot Reload**, Anda **tidak perlu merestart bot** (`npm start`) saat menambahkan, menghapus, atau mengedit file plugin. Semua perubahan akan langsung diterapkan secara instan!
+## 🛡️ Keamanan & Stabilitas
+
+- **Rate Limiting** — Cooldown 3 detik per user untuk mencegah spam
+- **Auto-Backup** — Database otomatis di-backup setiap 24 jam (7 backup terakhir)
+- **Memory Cleanup** — Pembersihan otomatis untuk mencegah memory leak
+- **Reconnect** — Auto-reconnect dengan exponential backoff (max 10 retry)
+- **Integrity Check** — Database dicek saat startup untuk deteksi corruption
+- **Temp Cleanup** — File temporary dibersihkan otomatis saat startup
+
+## 📄 License
+
+MIT © [Yenvys](https://github.com/Yenvys)

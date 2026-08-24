@@ -1,0 +1,10 @@
+node_modules
+.git
+.env
+data/session_*
+data/db/backups
+data/tmp
+data/logs
+data/store.json
+*.md
+.gitignore

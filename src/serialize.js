@@ -2,7 +2,10 @@ import { getContentType, jidNormalizedUser, downloadMediaMessage } from 'baileys
 import db, { getLidMapping, saveContact, saveMetadata, syncParticipants } from './database.js';
 import { config } from '../config.js';
 import { execSync } from 'child_process';
-import { getMessageFromStoreById } from './helper.js';
+import { getMessageFromStoreById, groupCache } from './helper.js';
+
+// Group metadata cache TTL: 5 menit
+const GROUP_CACHE_TTL = 300000;
 
 export async function serialize(sock, m) {
     if (!m) return m;
@@ -133,7 +136,18 @@ export async function serialize(sock, m) {
     m.isBotAdmin = false;
 
     if (m.isGroup) {
-        const metadata = await sock.groupMetadata(m.from).catch(() => null);
+        // Cached groupMetadata — hindari panggilan API berulang untuk grup yang sama
+        let metadata = null;
+        const cached = groupCache.get(m.from);
+        if (cached && (Date.now() - cached._cachedAt) < GROUP_CACHE_TTL) {
+            metadata = cached;
+        } else {
+            metadata = await sock.groupMetadata(m.from).catch(() => null);
+            if (metadata) {
+                metadata._cachedAt = Date.now();
+                groupCache.set(m.from, metadata);
+            }
+        }
         if (metadata) {
             const participants = metadata.participants || [];
             m.groupName = metadata.subject;

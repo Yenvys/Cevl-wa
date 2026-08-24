@@ -64,6 +64,11 @@ export default {
             const targetNum = finalJid.split('@')[0];
             const configPath = path.resolve('./config.js');
 
+            // Validasi format nomor (minimal 10 digit, hanya angka)
+            if (!/^\d{10,15}$/.test(targetNum)) {
+                return m.reply('_Format nomor tidak valid! Nomor harus 10-15 digit angka._');
+            }
+
             if (action === 'add') {
                 if (config.ownerNumbers.includes(targetNum)) return m.reply("_Nomor telepon tersebut sudah terdaftar di dalam list Owner._");
 
@@ -74,7 +79,9 @@ export default {
             }
 
             if (action === 'remove' || action === 'del') {
-                if (targetNum === '62895806279898') return m.reply(res.owner);
+                // Super-owner (nomor pertama di config) tidak bisa dihapus
+                const superOwner = config.ownerNumbers[0];
+                if (targetNum === superOwner) return m.reply('_Tidak bisa menghapus super-owner (owner utama) dari daftar._');
                 if (!config.ownerNumbers.includes(targetNum)) return m.reply("_Nomor tersebut memang tidak tercantum di dalam list Owner._");
 
                 config.ownerNumbers = config.ownerNumbers.filter(num => num !== targetNum);
@@ -103,6 +110,10 @@ function saveOwnerConfig(filePath, newOwnerList) {
         const regexOwner = /(['"]?)ownerNumbers\1\s*:\s*\[[\s\S]*?\]/;
 
         if (regexOwner.test(content)) {
+            // Backup config sebelum write untuk mencegah corruption
+            const backupPath = filePath + '.bak';
+            fs.writeFileSync(backupPath, content, 'utf-8');
+
             const updatedContent = content.replace(
                 regexOwner,
                 `"ownerNumbers": ${JSON.stringify(newOwnerList, null, 4)}`
@@ -113,5 +124,13 @@ function saveOwnerConfig(filePath, newOwnerList) {
         }
     } catch (e) {
         console.error("[CONFIG_WRITE_FATAL]", e.message);
+        // Restore dari backup jika ada error saat write
+        const backupPath = filePath + '.bak';
+        if (fs.existsSync(backupPath)) {
+            try {
+                fs.copyFileSync(backupPath, filePath);
+                console.log("[CONFIG_RESTORE] Config berhasil di-restore dari backup.");
+            } catch { }
+        }
     }
 }

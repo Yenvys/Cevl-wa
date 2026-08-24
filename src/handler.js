@@ -6,6 +6,7 @@ import cron from 'node-cron';
 import { getGroupSettings, getAutoCloseGroups, getLidMapping, isUserWhitelisted, incrementGroupMessage, getAfk, setAfk, deleteAfk } from './database.js';
 import { serialize } from './serialize.js';
 import { config } from '../config.js';
+import { groupCache } from './helper.js';
 
 export class Handler {
   constructor({ pluginDir, logger }) {
@@ -24,7 +25,25 @@ export class Handler {
     this.aliases = new Map();
     this.acCloseTask = null;
     this.acOpenTask = null;
+
+    // Rate limiting: Map<sender, lastCommandTimestamp>
+    this.cooldowns = new Map();
+    this.cooldownMs = 3000; // 3 detik cooldown antar command per user
+
+    // Periodic cleanup untuk mencegah memory leak
+    this._startCleanupInterval();
     this._initWatcher();
+  }
+
+  _startCleanupInterval() {
+    // Bersihkan processedMsgs & cooldowns setiap 5 menit
+    setInterval(() => {
+      this.processedMsgs.clear();
+      const now = Date.now();
+      for (const [key, ts] of this.cooldowns.entries()) {
+        if (now - ts > 60000) this.cooldowns.delete(key);
+      }
+    }, 300000);
   }
 
   _initWatcher() {
@@ -213,7 +232,18 @@ export class Handler {
         const settings = await getGroupSettings(id);
         if (!settings?.isWhitelist || (!settings.welcome && !settings.goodbye)) return;
 
-        const metadata = await sock.groupMetadata(id).catch(() => ({ subject: 'Grup' }));
+        const GROUP_CACHE_TTL = 300000;
+        let metadata;
+        const cached = groupCache.get(id);
+        if (cached && (Date.now() - cached._cachedAt) < GROUP_CACHE_TTL) {
+            metadata = cached;
+        } else {
+            metadata = await sock.groupMetadata(id).catch(() => ({ subject: 'Grup' }));
+            if (metadata.participants) {
+                metadata._cachedAt = Date.now();
+                groupCache.set(id, metadata);
+            }
+        }
 
         for (let jid of participants) {
           const rawJid = typeof jid === 'string' ? jid : (jid?.id || jid?.jid);
@@ -364,6 +394,15 @@ export class Handler {
         const plugin = this.aliases.get(cmdName);
 
         if (plugin) {
+          // Rate limiting (owner tidak kena cooldown)
+          if (!m.isOwner) {
+            const lastCmd = this.cooldowns.get(m.sender);
+            if (lastCmd && (Date.now() - lastCmd) < this.cooldownMs) {
+              continue; // Skip, masih dalam cooldown
+            }
+            this.cooldowns.set(m.sender, Date.now());
+          }
+
           m.prefix = usedPrefix;
           m.args = args;
           m.query = args.join(' ');

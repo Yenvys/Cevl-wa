@@ -1,8 +1,23 @@
+# Dependencies
 node_modules/
+
+# Environment
 .env
+
+# Data & Runtime
 data/
 *.db
 *.sqlite
 *.log
 tmp/
 scratch/
+
+# Build
+package-lock.json
+
+# Backup files
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db

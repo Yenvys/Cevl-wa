@@ -1,12 +1,31 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 
 const dataDir = path.join(process.cwd(), 'data', 'db');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 
 const db = new Database(path.join(dataDir, 'database.db'));
 db.pragma('journal_mode = WAL');
+
+// Integrity check saat startup untuk deteksi corruption
+try {
+  const integrityResult = db.pragma('integrity_check');
+  if (integrityResult[0]?.integrity_check !== 'ok') {
+    console.error('\x1b[1;31m[DB WARN]\x1b[0m Database integrity check gagal:', integrityResult);
+  }
+} catch (e) {
+  console.error('\x1b[1;31m[DB ERROR]\x1b[0m Gagal menjalankan integrity check:', e.message);
+}
+
+// Schema version tracking untuk migration
+db.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY, applied_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
+const currentVersion = db.prepare('SELECT MAX(version) as v FROM schema_version').get()?.v || 0;
+if (currentVersion < 1) {
+  db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (?)').run(1);
+}
+
 db.exec(`
     CREATE TABLE IF NOT EXISTS contacts (
         jid TEXT PRIMARY KEY, 
@@ -107,11 +126,9 @@ export function deleteAfk(jid) {
 }
 
 export function getGroupSettings(jid) {
-    let row = db.prepare('SELECT * FROM group_settings WHERE jid = ?').get(jid);
-    if (!row) {
-        db.prepare('INSERT INTO group_settings (jid) VALUES (?)').run(jid);
-        row = db.prepare('SELECT * FROM group_settings WHERE jid = ?').get(jid);
-    }
+    // Optimized: INSERT OR IGNORE + single SELECT (menghindari double query)
+    db.prepare('INSERT OR IGNORE INTO group_settings (jid) VALUES (?)').run(jid);
+    const row = db.prepare('SELECT * FROM group_settings WHERE jid = ?').get(jid);
     return {
         welcome: row.welcome === 1,
         goodbye: row.goodbye === 1,
@@ -194,6 +211,37 @@ export function updateUserWhitelist(jid, value, pushname = 'Unknown') {
 
 export function getWhitelistedUsers() {
     return db.prepare('SELECT jid, pushname FROM contacts WHERE is_whitelist = 1').all();
+}
+
+// DATABASE BACKUP
+
+export function backupDatabase() {
+    const dbPath = path.join(dataDir, 'database.db');
+    const backupDir = path.join(dataDir, 'backups');
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupPath = path.join(backupDir, `database_${timestamp}.db`);
+
+    try {
+        // Gunakan SQLite VACUUM INTO untuk backup yang konsisten (tanpa WAL issues)
+        db.exec(`VACUUM INTO '${backupPath.replace(/\\/g, '/')}'`);
+        
+        // Hapus backup lama (simpan 7 terakhir)
+        const backups = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith('database_') && f.endsWith('.db'))
+            .sort()
+            .reverse();
+        
+        for (let i = 7; i < backups.length; i++) {
+            try { fs.unlinkSync(path.join(backupDir, backups[i])); } catch { }
+        }
+
+        return backupPath;
+    } catch (e) {
+        console.error('\x1b[1;31m[DB_BACKUP_ERR]\x1b[0m', e.message);
+        return null;
+    }
 }
 
 export default db;
