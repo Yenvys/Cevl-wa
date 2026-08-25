@@ -1,89 +1,157 @@
-import { res } from '../src/response.js';
-
 /**
- * plugins/debugtombol.js
- * Command Tools buat memberondong chat dengan semua jenis tombol fungsional
+ * plugins/tes.js
+ * Command untuk menampilkan demo semua tipe button menggunakan baileys-mbuilder
+ * Menampilkan: Quick Reply, URL, Copy, Selection List, ButtonV2, dan Location
  */
 
-import { sendButton } from '../src/button.js';
+import {
+    createButton,
+    createButtonV2,
+    sendQuickReply,
+    sendUrlButton,
+    sendSelection,
+    sendCopyButton
+} from '../src/mbuilder.js';
 
 export default {
-    cmd: ['btn'],
-    category: 'tools',
-    desc: ' tes beton.',
-    exec: async (m, { sock }) => {
-        const jid = m.from;
+    cmd: ['tesbutton', 'tb', 'buttontest'],
+    category: 'owner',
+    desc: 'Demo semua tipe button (baileys-mbuilder)',
+    exec: async (m, { sock, query, command }) => {
+        if (!m.isOwner) return;
 
-        console.log(`\x1b[1;34m[PROCESS]\x1b[0m Memberondong ${jid} dengan semua jenis tombol...`);
+        const sub = (query || 'all').toLowerCase();
 
-        const listButtons = [
-            // 1. Tombol Biasa (Quick Reply)
-            {
-                name: "quick_reply",
-                displayText: "cek koneksi",
-                id: ".ping"
-            },
-            // 2. Tombol Buka Link (CTA URL)
-            {
-                name: "cta_url",
-                displayText: "github",
-                url: "https://github.com/Yenvys"
-            },
-            // 3. Tombol Salin Teks (CTA Copy)
-            {
-                name: "cta_copy",
-                displayText: "📋 Salin ID User",
-                id: m.sender
-            },
-            // 4. Tombol Menu List Bottom Sheet (Single Select)
-            {
-                name: "single_select",
-                displayText: "📜 Buka Daftar Opsi",
-                sections: [
+        // ==========================================
+        // 1. QUICK REPLY BUTTONS
+        // ==========================================
+        if (sub === 'all' || sub === 'reply') {
+            await sendQuickReply(sock, m.from,
+                '*Demo Quick Reply Buttons*\n\nPilih salah satu opsi di bawah:',
+                [
+                    { text: '📊 Info Bot', id: '.info' },
+                    { text: '📋 Menu', id: '.menu' },
+                    { text: '🏓 Ping', id: '.ping' },
+                ],
+                {
+                    title: '♯ QUICK REPLY',
+                    footer: 'Tap button untuk menjalankan command'
+                }
+            );
+        }
+
+        // ==========================================
+        // 2. URL BUTTONS
+        // ==========================================
+        if (sub === 'all' || sub === 'url') {
+            await sendUrlButton(sock, m.from,
+                '*Demo URL Buttons*\n\nButton yang mengarahkan ke link external:',
+                [
+                    { text: '🐙 GitHub', url: 'https://github.com/Yenvys' },
+                    { text: '📢 Channel WA', url: 'https://whatsapp.com/channel/0029Vb6O1mk6GcGKNYa8yC3J' },
+                ],
+                {
+                    title: '♯ URL BUTTONS',
+                    footer: 'Tap untuk membuka link'
+                }
+            );
+        }
+
+        // ==========================================
+        // 3. COPY BUTTON
+        // ==========================================
+        if (sub === 'all' || sub === 'copy') {
+            await sendCopyButton(sock, m.from,
+                '*Demo Copy Button*\n\nTekan button untuk menyalin teks ke clipboard:',
+                'npm install baileys-mbuilder',
+                '📋 Copy Command',
+                {
+                    title: '♯ COPY BUTTON',
+                    footer: 'Text akan disalin ke clipboard'
+                }
+            );
+        }
+
+        // ==========================================
+        // 4. SELECTION LIST (DROPDOWN)
+        // ==========================================
+        if (sub === 'all' || sub === 'list') {
+            await sendSelection(sock, m.from,
+                '*Demo Selection List*\n\nPilih dari dropdown menu di bawah:',
+                '📝 Pilih Kategori',
+                [
                     {
-                        title: "Layanan Utama",
+                        title: '🎵 Downloader',
                         rows: [
-                            {
-                                id: ".menu",
-                                title: "bot menu",
-                                description: "ya intinya list command lah"
-                            },
-                            {
-                                id: ".info",
-                                title: "stats",
-                                description: "> Lihat info bot"
-                            }
+                            { title: 'YouTube', description: 'Download video/audio YouTube', id: '.yt' },
+                            { title: 'TikTok', description: 'Download video TikTok', id: '.tt' },
+                            { title: 'Instagram', description: 'Download post/reel IG', id: '.ig' },
                         ]
                     },
                     {
-                        title: "Bantuan",
+                        title: '🤖 AI Tools',
                         rows: [
-                            {
-                                id: ".owner list",
-                                title: "Hubungi Admin",
-                                description: "> Kalo ada error lapor sini"
-                            }
+                            { title: 'AI Chat', description: 'Chat dengan Gemini AI', id: '.ai' },
                         ]
                     }
-                ]
-            }
-        ];
-
-        try {
-            await sendButton(
-                sock,
-                jid,
-                "BETON",
-                "kanjud kuda.",
-                "Select an option below",
-                listButtons
+                ],
+                {
+                    title: '♯ SELECTION LIST',
+                    footer: 'Pilih opsi dari menu'
+                }
             );
+        }
 
-            console.log(`\x1b[1;32m[SUCCESS]\x1b[0m Semua tipe tombol sukses dirender di nomor target.`);
+        // ==========================================
+        // 5. MIXED BUTTONS (KOMBINASI)
+        // ==========================================
+        if (sub === 'all' || sub === 'mix') {
+            const msg = createButton(sock)
+                .setTitle('♯ MIXED BUTTONS')
+                .setBody('*Demo Mixed Buttons*\n\nSemua tipe button dalam 1 pesan:')
+                .setFooter('baileys-mbuilder v4.7')
+                .addReply('📊 Quick Reply', '.info')
+                .addUrl('🌐 Open URL', 'https://github.com/Yenvys')
+                .addCopy('📋 Copy Text', 'Hello World!')
+                .addLocation()
+                .addSelection('📝 Select')
+                .makeSection('Commands')
+                .makeRow('', 'Menu', 'Lihat daftar command', '.menu')
+                .makeRow('', 'Ping', 'Cek response time', '.ping');
 
-        } catch (e) {
-            console.error(`\x1b[1;31m[FATAL ERROR]\x1b[0m`, e);
-            m.reply(res.error);
+            await msg.send(m.from);
+        }
+
+        // ==========================================
+        // 6. BUTTON V2 (LEGACY STYLE)
+        // ==========================================
+        if (sub === 'all' || sub === 'v2') {
+            const msg = createButtonV2(sock)
+                .setTitle('♯ BUTTON V2')
+                .setSubtitle('Legacy-style buttons')
+                .setBody('*Demo ButtonV2*\n\nStyle button yang berbeda (location-based):')
+                .setFooter('baileys-mbuilder')
+                .addButton('📊 Info', '.info')
+                .addButton('📋 Menu', '.menu')
+                .addButton('🏓 Ping', '.ping');
+
+            await msg.send(m.from);
+        }
+
+        // ==========================================
+        // HELP
+        // ==========================================
+        if (sub === 'help') {
+            let helpText = `*♯ BUTTON TEST — HELP*\n\n`;
+            helpText += `*Penggunaan:*\n`;
+            helpText += `> ${m.prefix}${command} — Tampilkan semua demo\n`;
+            helpText += `> ${m.prefix}${command} reply — Quick reply buttons\n`;
+            helpText += `> ${m.prefix}${command} url — URL buttons\n`;
+            helpText += `> ${m.prefix}${command} copy — Copy button\n`;
+            helpText += `> ${m.prefix}${command} list — Selection list\n`;
+            helpText += `> ${m.prefix}${command} mix — Mixed buttons\n`;
+            helpText += `> ${m.prefix}${command} v2 — ButtonV2 (legacy)\n`;
+            return m.reply(helpText);
         }
     }
 };

@@ -13,6 +13,7 @@
     "@google/genai": "^1.42.0",
     "axios": "^1.13.6",
     "baileys": "npm:@whiskeysockets/baileys@latest",
+    "baileys-mbuilder": "^4.7.0-lts",
     "better-sqlite3": "^12.6.2",
     "brat-canvas": "^1.0.30",
     "chalk": "^5.6.2",

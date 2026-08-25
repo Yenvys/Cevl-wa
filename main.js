@@ -82,7 +82,7 @@ async function main() {
 
     const sock = await startSock(sessionId, log, onSocketReady);
 
-    log.success(`Yenvy [${sessionId}] siap!`);
+    log.success(`Cevl [${sessionId}] siap!`);
 
     setInterval(async () => {
       try {
