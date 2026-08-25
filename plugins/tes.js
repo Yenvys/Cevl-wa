@@ -20,12 +20,12 @@ export default {
     exec: async (m, { sock, query, command }) => {
         if (!m.isOwner) return;
 
-        const sub = (query || 'all').toLowerCase();
+        const sub = (query || '').toLowerCase();
 
         // ==========================================
         // 1. QUICK REPLY BUTTONS
         // ==========================================
-        if (sub === 'all' || sub === 'reply') {
+        if (sub === 'reply') {
             await sendQuickReply(sock, m.from,
                 '*Demo Quick Reply Buttons*\n\nPilih salah satu opsi di bawah:',
                 [
@@ -43,7 +43,7 @@ export default {
         // ==========================================
         // 2. URL BUTTONS
         // ==========================================
-        if (sub === 'all' || sub === 'url') {
+        if (sub === 'url') {
             await sendUrlButton(sock, m.from,
                 '*Demo URL Buttons*\n\nButton yang mengarahkan ke link external:',
                 [
@@ -60,7 +60,7 @@ export default {
         // ==========================================
         // 3. COPY BUTTON
         // ==========================================
-        if (sub === 'all' || sub === 'copy') {
+        if (sub === 'copy') {
             await sendCopyButton(sock, m.from,
                 '*Demo Copy Button*\n\nTekan button untuk menyalin teks ke clipboard:',
                 'npm install baileys-mbuilder',
@@ -75,7 +75,7 @@ export default {
         // ==========================================
         // 4. SELECTION LIST (DROPDOWN)
         // ==========================================
-        if (sub === 'all' || sub === 'list') {
+        if (sub === 'list') {
             await sendSelection(sock, m.from,
                 '*Demo Selection List*\n\nPilih dari dropdown menu di bawah:',
                 '📝 Pilih Kategori',
@@ -105,7 +105,7 @@ export default {
         // ==========================================
         // 5. MIXED BUTTONS (KOMBINASI)
         // ==========================================
-        if (sub === 'all' || sub === 'mix') {
+        if (!sub || sub === 'mix') {
             const msg = createButton(sock)
                 .setTitle('♯ MIXED BUTTONS')
                 .setBody('*Demo Mixed Buttons*\n\nSemua tipe button dalam 1 pesan:')
@@ -125,7 +125,7 @@ export default {
         // ==========================================
         // 6. BUTTON V2 (LEGACY STYLE)
         // ==========================================
-        if (sub === 'all' || sub === 'v2') {
+        if (!sub || sub === 'v2') {
             const msg = createButtonV2(sock)
                 .setTitle('♯ BUTTON V2')
                 .setSubtitle('Legacy-style buttons')
@@ -133,7 +133,6 @@ export default {
                 .setFooter('baileys-mbuilder')
                 .addButton('📊 Info', '.info')
                 .addButton('📋 Menu', '.menu')
-                .addButton('🏓 Ping', '.ping');
 
             await msg.send(m.from);
         }

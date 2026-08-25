@@ -7,7 +7,8 @@
  * @see https://gist.github.com/ValdazGT/adc8b767a082d18d12ff3e7f01b78651
  */
 
-import { Button, ButtonV2, Carousel, AIRich, Toolkit } from 'baileys-mbuilder';
+import MBuilder from 'baileys-mbuilder';
+const { Button, ButtonV2, Carousel, AIRich, Toolkit } = MBuilder;
 
 // ==========================================
 // FACTORY FUNCTIONS
