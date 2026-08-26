@@ -2,7 +2,7 @@
 
 Cevl adalah bot WhatsApp multi-fitur yang ditulis dalam Node.js menggunakan library **Baileys**. Arsitektur *plugin-based* yang dinamis memungkinkan penambahan, penghapusan, dan pengeditan fitur tanpa merestart bot (**Hot Reload**).
 
-## ✨ Fitur Utama
+## Fitur Utama
 
 | Kategori | Fitur |
 |----------|-------|
@@ -14,13 +14,13 @@ Cevl adalah bot WhatsApp multi-fitur yang ditulis dalam Node.js menggunakan libr
 | **Owner** | Eval, Exec, Mode, Prefix, Whitelist management |
 | **Sistem** | Plugin hot reload, Rate limiting, Auto-backup database |
 
-## 📋 Persyaratan
+## Persyaratan
 
 - **Node.js** v18+ (LTS recommended: v20 atau v22)
 - **Git**
 - **FFmpeg** (diperlukan untuk fitur media — sticker, audio conversion, dll)
 
-## 🚀 Cara Instalasi
+## Cara Instalasi
 
 ### 1. Clone & Install
 
@@ -60,14 +60,14 @@ Saat pertama kali berjalan, pilih metode login:
 1. **Pairing Code** — Masukkan nomor WA, lalu input kode di WhatsApp > Tautkan Perangkat
 2. **QR Code** — Scan QR code dari terminal
 
-## 🐳 Docker (Opsional)
+## Docker (Opsional)
 
 ```bash
 docker build -t cevl-bot .
 docker run -d --name cevl --env-file .env -v ./data:/app/data cevl-bot
 ```
 
-## ⚙️ PM2 — Production (Opsional)
+## PM2 — Production (Opsional)
 
 ```bash
 npm install -g pm2
@@ -110,7 +110,7 @@ PM2 akan otomatis restart bot jika crash, dengan memory limit 500MB.
     └── tmp/              # Temporary files
 ```
 
-## 🔌 Cara Menambahkan Command Baru
+## Cara Menambahkan Command Baru
 
 Buat file `.js` baru di `/plugins/` atau sub-direktorinya. Bot akan otomatis memuat tanpa restart!
 
@@ -128,7 +128,7 @@ export default {
 };
 ```
 
-## 🛡️ Keamanan & Stabilitas
+## Keamanan & Stabilitas
 
 - **Rate Limiting** — Cooldown 3 detik per user untuk mencegah spam
 - **Auto-Backup** — Database otomatis di-backup setiap 24 jam (7 backup terakhir)

@@ -1,9 +1,12 @@
 /**
  * plugins/system/menu.js
  * Menampilkan daftar menu perintah bot (Universal Chat Style)
+ * Menggunakan ButtonV2 dari baileys-mbuilder dengan thumbnail
  */
 import { config } from '../../config.js';
-import { sendButton } from '../../src/button.js';
+import { createButtonV2 } from '../../src/mbuilder.js';
+
+const MENU_THUMBNAIL = 'https://files.catbox.moe/r5qcku.jpg';
 
 const getGreeting = () => {
     const hour = parseInt(new Date().toLocaleTimeString('id-ID', {
@@ -158,21 +161,15 @@ export default {
             });
             menuText += ``;
         });
-        const listButtons = [
-            {
-                name: "quick_reply",
-                displayText: "Owner",
-                id: ".owner list"
-            }
-        ];
 
-        await sendButton(
-            sock,
-            m.from,
-            "*♯ MAIN MENU*",
-            menuText.trim(),
-            "Tap button below to see bot owners",
-            listButtons
-        );
+        const msg = createButtonV2(sock)
+            .setTitle('♯ MAIN MENU')
+            .setSubtitle(`${greeting} 👋`)
+            .setBody(menuText.trim())
+            .setFooter('Tap button di bawah untuk melihat daftar owner')
+            .setThumbnail(MENU_THUMBNAIL)
+            .addButton('👤 Owner List', '.owner list');
+
+        await msg.send(m.from);
     }
 };
