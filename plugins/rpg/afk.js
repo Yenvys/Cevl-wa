@@ -8,7 +8,7 @@ export default {
         const reason = args.join(' ') || 'Tanpa alasan';
         const time = Date.now();
 
-        setAfk(m.sender, reason, time);
+        setAfk(m.sender, m.from, reason, time);
 
         return m.reply(`*♯ AFK*\n> @${m.sender.split('@')[0]} sekarang sedang AFK.\n> *Alasan:* ${reason}\n_Jangan ganggu dulu._`);
     }

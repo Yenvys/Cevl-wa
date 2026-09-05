@@ -7,6 +7,7 @@ import { getGroupSettings, getAutoCloseGroups, getLidMapping, isUserWhitelisted,
 import { serialize } from './serialize.js';
 import { config } from '../config.js';
 import { groupCache } from './helper.js';
+import { runDefender } from './defender.js';
 
 export class Handler {
   constructor({ pluginDir, logger }) {
@@ -288,6 +289,9 @@ export class Handler {
 
         const settings = m.isGroup ? await getGroupSettings(m.from) : null;
 
+        // Jalankan Defender
+        await runDefender(m, { sock, handler: this });
+
         // INCREMENT TOTAL CHAT
         if (m.isGroup && m.sender) {
           incrementGroupMessage(m.from, m.sender);
@@ -308,9 +312,9 @@ export class Handler {
 
         // Cek jika sender baru saja kembali dari AFK
         if (m.sender) {
-          const afkData = getAfk(m.sender);
+          const afkData = getAfk(m.sender, m.from);
           if (afkData) {
-            deleteAfk(m.sender);
+            deleteAfk(m.sender, m.from);
             const duration = Date.now() - afkData.time;
             const hours = Math.floor(duration / 3600000);
             const minutes = Math.floor((duration % 3600000) / 60000);
@@ -337,7 +341,7 @@ export class Handler {
           const uniqueMentioned = [...new Set(mentioned)];
 
           for (let jid of uniqueMentioned) {
-            const afkData = getAfk(jid);
+            const afkData = getAfk(jid, m.from);
             if (afkData) {
               const duration = Date.now() - afkData.time;
               const hours = Math.floor(duration / 3600000);
@@ -384,7 +388,8 @@ export class Handler {
           }
         }
 
-        const usedPrefix = this.prefix.find(p => m.body?.startsWith(p));
+        const sortedPrefixes = [...this.prefix].sort((a, b) => b.length - a.length);
+        const usedPrefix = sortedPrefixes.find(p => m.body?.startsWith(p));
         if (usedPrefix === undefined) continue;
 
         const bodyNoPrefix = m.body.slice(usedPrefix.length).trim();

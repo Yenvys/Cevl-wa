@@ -132,7 +132,7 @@ export default {
         const prefix = handler.prefix;
         const greeting = getGreeting();
 
-        let menuText = ``;
+        let menuText = `*♯ MAIN MENU*`;
         menuText += `> MODE : ${handler.mode.toUpperCase()}\n`;
         menuText += `> PREFIX : | ${prefix || 'None'} |\n`;
         menuText += `${readMore}\n`;
@@ -163,12 +163,12 @@ export default {
         });
 
         const msg = createButtonV2(sock)
-            .setTitle('♯ MAIN MENU')
+            .setTitle('♯ Cevl')
             .setSubtitle(`${greeting} 👋`)
             .setBody(menuText.trim())
             .setFooter('Tap button di bawah untuk melihat daftar owner')
             .setThumbnail(MENU_THUMBNAIL)
-            .addButton('👤 Owner List', '.owner list');
+            .addButton('Contact Owner', '.owner list');
 
         await msg.send(m.from);
     }

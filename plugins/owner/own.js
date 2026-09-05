@@ -17,7 +17,7 @@ export default {
     desc: 'Menambahkan, menghapus, atau melihat daftar nomor telepon yang memiliki hak akses penuh sebagai Owner bot.',
     exec: async (m, { sock, args = [] }) => {
         const action = args[0]?.toLowerCase();
-        
+
         if (action !== 'list' && !m.isOwner) return m.reply(res.owner);
 
         // ==========================================
@@ -27,13 +27,13 @@ export default {
             const list = config.ownerNumbers || [];
             if (list.length === 0) return m.reply("_Tidak ada list nomor Owner yang tercatat._");
             // Teks pengantar manis sebelum kontak dikirim
-            //await m.reply(`_*Berikut adalah daftar kartu kontak resmi jajaran Owner & Developer aktif Yenvy Bot...*_`);
+            //await m.reply(`_*Berikut adalah daftar kartu kontak resmi jajaran Owner & Developer aktif Cevl Bot...*_`);
 
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
             const mappedOwners = list.map((num, i) => {
                 return {
-                    name: i === 0 ? `AlFarel` : `Owner ${i + 1}`,
+                    name: i === 0 ? `Yenvy` : `Owner ${i + 1}`,
                     number: num
                 };
             });

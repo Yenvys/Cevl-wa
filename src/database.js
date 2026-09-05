@@ -110,19 +110,22 @@ export function getGroupMessages(groupJid) {
 
 // AFK TRACKING
 
-export function setAfk(jid, reason, time) {
-    if (!jid) return;
-    db.prepare('INSERT OR REPLACE INTO afk (jid, reason, time) VALUES (?, ?, ?)').run(jid, reason, time);
+export function setAfk(jid, groupJid, reason, time) {
+    if (!jid || !groupJid) return;
+    const id = jid + '_' + groupJid;
+    db.prepare('INSERT OR REPLACE INTO afk (jid, reason, time) VALUES (?, ?, ?)').run(id, reason, time);
 }
 
-export function getAfk(jid) {
-    if (!jid) return null;
-    return db.prepare('SELECT reason, time FROM afk WHERE jid = ?').get(jid);
+export function getAfk(jid, groupJid) {
+    if (!jid || !groupJid) return null;
+    const id = jid + '_' + groupJid;
+    return db.prepare('SELECT reason, time FROM afk WHERE jid = ?').get(id);
 }
 
-export function deleteAfk(jid) {
-    if (!jid) return;
-    db.prepare('DELETE FROM afk WHERE jid = ?').run(jid);
+export function deleteAfk(jid, groupJid) {
+    if (!jid || !groupJid) return;
+    const id = jid + '_' + groupJid;
+    db.prepare('DELETE FROM afk WHERE jid = ?').run(id);
 }
 
 export function getGroupSettings(jid) {

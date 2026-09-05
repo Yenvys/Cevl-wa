@@ -10,44 +10,40 @@ import { res } from '../../src/response.js';
 
 async function cloudHostIG(url) {
     try {
-        const res = await axios.get(`https://api.zellrayy.com/download/instagram?url=${encodeURIComponent(url)}`);
-        if (!res.data || res.data.status !== true) return null;
-        
-        const result = res.data.result;
-        
-        let medias = [];
-        let caption = '';
-        
-        if (Array.isArray(result)) {
-            for (let item of result) {
-                if (item.video_url) medias.push({ url: item.video_url, type: 'video' });
-                else if (item.image_url) medias.push({ url: item.image_url, type: 'image' });
-                else if (item.url) medias.push({ url: item.url, type: item.url.includes('.mp4') ? 'video' : 'image' });
-                
-                if (item.caption && !caption) caption = item.caption;
-            }
-        } else if (result.url) {
-            const arr = Array.isArray(result.url) ? result.url : [result.url];
-            medias = arr.map(u => ({ url: u, type: u.includes('.mp4') ? 'video' : 'image' }));
-        } else if (result.media) {
-            const arr = Array.isArray(result.media) ? result.media : [result.media];
-            medias = arr.map(u => ({ url: u, type: u.includes('.mp4') ? 'video' : 'image' }));
-        } else if (result.downloadURL) {
-            const arr = Array.isArray(result.downloadURL) ? result.downloadURL : [result.downloadURL];
-            medias = arr.map(u => ({ url: u, type: u.includes('.mp4') ? 'video' : 'image' }));
-        } else if (typeof result === 'string') {
-            medias = [{ url: result, type: result.includes('.mp4') ? 'video' : 'image' }];
+        const res = await axios.get(`https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`);
+        if (res.data && res.data.result) {
+           let medias = [];
+           if (Array.isArray(res.data.result)) {
+               medias = res.data.result.map(m => ({ url: m.url || m, type: (m.url || m).includes('.mp4') ? 'video' : 'image' }));
+           } else {
+               medias = [{ url: res.data.result, type: res.data.result.includes('.mp4') ? 'video' : 'image' }];
+           }
+           return {
+               medias: medias.filter(m => typeof m.url === 'string' && m.url.startsWith('http')),
+               caption: 'Instagram Downloader',
+               user: 'user',
+               isVideo: false
+           };
         }
+    } catch(e) {}
 
-        return {
-            medias: medias.filter(m => typeof m.url === 'string' && m.url.startsWith('http')),
-            caption: caption || result?.title || result?.caption || '',
-            user: result?.username || result?.[0]?.username || 'user',
-            isVideo: false 
-        };
-    } catch (e) { 
-        return null; 
-    }
+    try {
+        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/igdl?url=${encodeURIComponent(url)}`);
+        if (res.data && res.data.data) {
+           let medias = [];
+           if (Array.isArray(res.data.data)) {
+               medias = res.data.data.map(m => ({ url: m.url || m, type: (m.url || m).includes('.mp4') ? 'video' : 'image' }));
+           }
+           return {
+               medias: medias.filter(m => typeof m.url === 'string' && m.url.startsWith('http')),
+               caption: 'Instagram Downloader',
+               user: 'user',
+               isVideo: false
+           };
+        }
+    } catch (e) {}
+
+    return null;
 }
 
 export default {
