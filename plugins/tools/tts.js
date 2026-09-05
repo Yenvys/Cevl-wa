@@ -10,13 +10,12 @@ export default {
     exec: async (m, { sock, args, command }) => {
         let lang = 'id';
         let text = '';
-        
+
         if (command.endsWith('?')) {
             const helpText = [
-                "🗣️ *TEXT TO SPEECH (TTS)*",
-                "",
+                "*♯ TEXT TO SPEECH (TTS)*",
                 `Gunakan \`${m.prefix}tts [kode_bahasa] [teks]\` atau \`${m.prefix}tts [teks]\`.`,
-                "💡 *Contoh:* `" + m.prefix + "tts en Hello world` atau `" + m.prefix + "tts Halo dunia`",
+                "> 💡 *Contoh:* `" + m.prefix + "tts en Hello world` atau `" + m.prefix + "tts Halo dunia`",
             ];
             return m.reply(helpText.join('\n'));
         }
@@ -28,12 +27,12 @@ export default {
         } else {
             text = args.join(' ');
         }
-        
+
         // Ambil dari pesan yang di-quote jika teks kosong
         if (!text && m.quoted && m.quoted.text) {
             text = m.quoted.text;
         }
-        
+
         text = text.replace(/[*_~`]/g, "").replace(/[\r\n]+/g, ". ").trim();
 
         if (!text) return m.reply('❌ Teks tidak boleh kosong!');
@@ -48,9 +47,9 @@ export default {
             });
 
             if (!res.ok) throw new Error(`TTS API error: ${res.status}`);
-            
+
             const buffer = await res.arrayBuffer();
-            
+
             return await sock.sendMessage(m.from, {
                 audio: Buffer.from(buffer),
                 mimetype: 'audio/mp4',

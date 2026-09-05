@@ -45,18 +45,16 @@ async function startGame(m, sock, levelName) {
     const xpReward = level.xp;
 
     const texts = [
-        `🧮 [ Level: *${selectedLevel.toUpperCase()}* ]`,
+        `*♯ ${selectedLevel.toUpperCase()}*`,
         `Berapakah hasil dari *${a} ${op} ${b}*?`,
         "",
-        `⏱️ *Waktu:* 30 detik`,
-        `🎁 *Hadiah:* ${xpReward} XP`,
-        "",
-        `📝 *Note:*`,
-        `_Reply chat ini untuk menjawab!_`
+        ` *Waktu:* 30 detik`,
+        ` *Hadiah:* ${xpReward} XP`,
+        `> _Reply chat ini untuk menjawab!_`
     ];
 
     const resp = await sock.sendMessage(m.from, { text: texts.join("\n") }, { quoted: m });
-    
+
     if (!resp) return;
 
     const timeout = setTimeout(async () => {
@@ -87,21 +85,19 @@ export default {
 
         if (command.endsWith("?") || levelArg === "?") {
             const helpText = [
-                "🧮 *MATH GAME - CARA BERMAIN*",
+                "*♯ MATH GAME - CARA BERMAIN*",
                 "",
                 `Gunakan perintah \`${m.prefix}math [level]\` untuk memulai.`,
                 "",
                 "*Daftar Level & Inisial:*",
-                "🟢 `e` / `easy` : 20 XP",
-                "🟡 `m` / `medium` : 40 XP",
-                "🔴 `h` / `hard` : 60 XP",
-                "💀 `i` / `impossible` : 150 XP",
+                "`e` / `easy` : 20 XP",
+                "`m` / `medium` : 40 XP",
+                "`h` / `hard` : 60 XP",
+                "`i` / `impossible` : 150 XP",
+                `*♯ Contoh:* \`${m.prefix}math m\` atau \`${m.prefix}math h\``,
                 "",
-                `💡 *Contoh:* \`${m.prefix}math m\` atau \`${m.prefix}math h\``,
-                "",
-                "⚠️ *Penting:*",
-                "- Harus *Reply/Quote* pesan soal untuk menjawab.",
-                "- Waktu menjawab adalah 30 detik."
+                "> - Harus *Reply/Quote* pesan soal untuk menjawab.",
+                "> - Waktu menjawab adalah 30 detik."
             ];
             return m.reply(helpText.join("\n"));
         }
@@ -116,7 +112,7 @@ export default {
 
     after: async (m, { sock }) => {
         if (!sessions.has(m.from) || !m.quoted) return;
-        
+
         const session = sessions.get(m.from);
 
         if (!session.done) {
@@ -131,7 +127,7 @@ export default {
 
                 const xp = session.xp;
                 const uang = xp * 10;
-                
+
                 let user = await UserRPG.findOne({ noWa: m.sender });
                 let levelUpMsg = "";
                 if (user) {
@@ -146,12 +142,12 @@ export default {
                     }
                     await user.save();
                 }
-                
+
                 const result = await sock.sendMessage(m.from, {
                     text: `🎉 *Selamat* @${m.sender.split("@")[0]}!\nJawaban kamu benar: *${session.answer}*\n\n🌟 *+${xp} XP*\n💵 *+¥${uang}*${levelUpMsg}\n\nBalas _lagi/lanjut/again/next_ untuk main lagi, atau _stop/nyerah_ untuk berhenti`,
                     mentions: [m.sender]
                 }, { quoted: m });
-                
+
                 if (result) session.resultId = result.key.id;
             } else if (STOP_WORDS.has(text)) {
                 clearTimeout(session.timeout);

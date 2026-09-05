@@ -75,14 +75,12 @@ async function startGame(m, sock, levelName) {
     const uangReward = xpReward * 10;
 
     const texts = [
-        `🧩 [ Level: *${selectedLevel.toUpperCase()}* ]`,
+        `*♯ ${selectedLevel.toUpperCase()}* `,
         `Petunjuk: *${clues}*`,
         "",
-        `⏱️ *Waktu:* 45 detik`,
-        `🎁 *Hadiah:* ${xpReward} XP | ¥${uangReward}`,
-        "",
-        `📝 *Note:*`,
-        `_Reply chat ini untuk menjawab!_`
+        ` *Waktu:* 45 detik`,
+        ` *Hadiah:* ${xpReward} XP | ¥${uangReward}`,
+        `> _Reply chat ini untuk menjawab!_`
     ];
 
     const resp = await sock.sendMessage(m.from, { text: texts.join("\n") }, { quoted: m });
@@ -126,10 +124,10 @@ export default {
             if (result) {
                 await sock.sendMessage(m.from, { react: { text: '✅', key: m.key } });
                 return m.reply(
-                    `✅ *Sinkronisasi Berhasil!*\n\n` +
-                    `🟢 *Mudah:* ${result.easy.length} kata\n` +
-                    `🟡 *Sedang:* ${result.medium.length} kata\n` +
-                    `🔴 *Sulit:* ${result.hard.length} kata\n\n` +
+                    ` *Sinkronisasi Berhasil!*\n\n` +
+                    ` *Mudah:* ${result.easy.length} kata\n` +
+                    ` *Sedang:* ${result.medium.length} kata\n` +
+                    ` *Sulit:* ${result.hard.length} kata\n\n` +
                     `Data disimpan dan dimuat ulang!`
                 );
             } else {
@@ -142,23 +140,20 @@ export default {
         const levelArg = (args[0] || "").toLowerCase();
         if (command.endsWith('?') || levelArg === '?') {
             const helpText = [
-                "🧩 *TEBAK KATA*",
+                "*♯ TEBAK KATA*",
                 "",
                 "Tebaklah kata berdasarkan petunjuk yang diberikan!",
                 `Gunakan perintah \`${m.prefix}tk [level]\` untuk memulai.`,
                 "",
                 "*Daftar Level & Inisial:*",
-                "🟢 `e` / `easy` : 1-6 huruf",
-                "🟡 `m` / `medium` : 7-9 huruf",
-                "🔴 `h` / `hard` : 10+ huruf",
+                "`e` / `easy` : 1-6 huruf",
+                "`m` / `medium` : 7-9 huruf",
+                "`h` / `hard` : 10+ huruf",
+                `*Contoh:* \`${m.prefix}tk m\` atau \`${m.prefix}tk h\``,
                 "",
-                `💡 *Contoh:* \`${m.prefix}tk m\` atau \`${m.prefix}tk h\``,
-                "",
-                "⚠️ *Penting:*",
-                "- Harus *Reply/Quote* pesan soal untuk menjawab.",
-                "- Waktu menjawab adalah 45 detik.",
-                "",
-                `⚙️ *Admin:* \`${m.prefix}tk.update\` untuk sinkronisasi kata.`
+                "> - Harus *Reply/Quote* pesan soal untuk menjawab.",
+                "> - Waktu menjawab adalah 45 detik.",
+                `> ⚙️ \`${m.prefix}tk.update\` untuk sinkronisasi kata.`
             ];
             return m.reply(helpText.join("\n"));
         }
