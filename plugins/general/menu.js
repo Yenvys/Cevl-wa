@@ -50,9 +50,11 @@ export default {
                 const uniquePlugins = Array.from(new Set(handler.plugins.values()));
                 const prefix = handler.prefix;
 
+                const totalCmds = uniquePlugins.filter(p => p.cmd).length;
                 let menuText = `*♯ ALIAS MENU*\n`;
                 menuText += `> MODE : ${handler.mode.toUpperCase()}\n`;
                 menuText += `> PREFIX : | ${prefix || 'None'} |\n`;
+                menuText += `> TOTAL : ${totalCmds} Commands\n`;
                 menuText += `${readMore}\n`;
 
                 const categories = {};
@@ -132,9 +134,11 @@ export default {
         const prefix = handler.prefix;
         const greeting = getGreeting();
 
-        let menuText = `*♯ MAIN MENU*`;
+        const totalCmds = plugins.filter(p => p.cmd).length;
+        let menuText = `*♯ MAIN MENU*\n`;
         menuText += `> MODE : ${handler.mode.toUpperCase()}\n`;
         menuText += `> PREFIX : | ${prefix || 'None'} |\n`;
+        menuText += `> TOTAL : ${totalCmds} Commands\n`;
         menuText += `${readMore}\n`;
 
         const categories = {};
@@ -164,7 +168,7 @@ export default {
 
         const msg = createButtonV2(sock)
             .setTitle('♯ Cevl')
-            .setSubtitle(`${greeting} 👋`)
+            .setSubtitle(`_Hi! ${greeting} 👋 Im Cevl im a simple WhatsApp bot built with Javascript._`)
             .setBody(menuText.trim())
             .setFooter('Tap button di bawah untuk melihat daftar owner')
             .setThumbnail(MENU_THUMBNAIL)
