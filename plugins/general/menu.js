@@ -168,7 +168,7 @@ export default {
 
         const msg = createButtonV2(sock)
             .setTitle('♯ Cevl')
-            .setSubtitle(`_Hi! ${greeting} 👋 Im Cevl im a simple WhatsApp bot built with Javascript._`)
+            .setSubtitle(`Hi! ${greeting} 👋 Im Cevl a simple WhatsApp bot.`)
             .setBody(menuText.trim())
             .setFooter('Tap button di bawah untuk melihat daftar owner')
             .setThumbnail(MENU_THUMBNAIL)
