@@ -1,38 +1,37 @@
-import UserRPG from '../../src/rpg/schema.js';
-import { formatYen } from '../../src/rpg/core.js';
-import { res } from '../../src/response.js';
-
+import UserRPG from "../../src/rpg/schema.js";
+import { formatYen } from "../../src/rpg/core.js";
+import { res } from "../../src/response.js";
 
 export default {
-    cmd: ['daftar', 'register', 'reg'],
-    category: 'rpg',
-    exec: async (m, { sock }) => {
-        try {
-            const isRegistered = await UserRPG.findOne({ noWa: m.sender });
-            
-            if (isRegistered) {
-                return m.reply("_Kamu Sudah Daftar. Cek di *.me*_");
-            }
+  cmd: ["daftar", "register", "reg"],
+  category: "rpg",
+  exec: async (m, { sock, command }) => {
+    try {
+      const isRegistered = await UserRPG.findOne({ noWa: m.sender });
 
-            const newUser = new UserRPG({
-                noWa: m.sender
-            });
+      if (isRegistered) {
+        return m.reply("_Kamu Sudah Daftar. Cek di *.me*_");
+      }
 
-            await newUser.save();
+      const newUser = new UserRPG({
+        noWa: m.sender,
+      });
 
-            const teks = `『 REGISTRASI 』\n\n` +
-                         `> 🎫 *Status:* Aktif / Terdaftar\n` +
-                         `> 📱 *Nomor:* @${m.sender.split('@')[0]}\n` +
-                         `> 💼 *Pekerjaan:* Pengangguran Sukses\n` +
-                         `> 💵 *Modal Awal:* ${formatYen(10000)}\n\n` +
-                         `_📌 Catatan: Ketik *.bursakerja* untuk mencari pekerjaan!_`;
+      await newUser.save();
 
-            // FIX: Hapus adReply, ganti pake reply murni dengan bawaan mention nomor
-            return m.reply(teks, { mentions: [m.sender] });
+      const teks =
+        `『 REGISTRASI 』\n\n` +
+        `> 🎫 *Status:* Aktif / Terdaftar\n` +
+        `> 📱 *Nomor:* @${m.sender.split("@")[0]}\n` +
+        `> 💼 *Pekerjaan:* Pengangguran Sukses\n` +
+        `> 💵 *Modal Awal:* ${formatYen(10000)}\n\n` +
+        `_📌 Catatan: Ketik *.bursakerja* untuk mencari pekerjaan!_`;
 
-        } catch (error) {
-            console.log(error);
-            return m.reply(res.error);
-        }
+      // FIX: Hapus adReply, ganti pake reply murni dengan bawaan mention nomor
+      return m.reply(teks, { mentions: [m.sender] });
+    } catch (error) {
+      console.log(error);
+      return m.reply(res.error);
     }
+  },
 };

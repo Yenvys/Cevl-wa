@@ -2,8 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import zlib from "zlib";
 import { config } from "../../config.js";
-import { res } from '../../src/response.js';
-
+import { res } from "../../src/response.js";
 
 async function fbDownloader(url) {
   try {
@@ -13,7 +12,7 @@ async function fbDownloader(url) {
         vid: url,
         prefix: "savefbs.com",
         ex: "",
-        format: ""
+        format: "",
       },
       {
         responseType: "arraybuffer",
@@ -21,10 +20,10 @@ async function fbDownloader(url) {
           "content-type": "application/json",
           "accept-encoding": "gzip, deflate, br",
           "user-agent": "Mozilla/5.0",
-          "origin": "https://savefbs.com",
-          "referer": "https://savefbs.com/"
-        }
-      }
+          origin: "https://savefbs.com",
+          referer: "https://savefbs.com/",
+        },
+      },
     );
 
     let html;
@@ -39,7 +38,7 @@ async function fbDownloader(url) {
     const result = {
       title: $("h3").first().text().trim() || "Facebook Video",
       thumbnail: $("img.aio-thumbnail").attr("src"),
-      links: []
+      links: [],
     };
 
     $("a.download-btn").each((i, el) => {
@@ -49,7 +48,7 @@ async function fbDownloader(url) {
       if (link && link.startsWith("http")) {
         result.links.push({
           quality: text,
-          url: link
+          url: link,
         });
       }
     });
@@ -63,28 +62,34 @@ async function fbDownloader(url) {
 export default {
   cmd: ["fb", "facebook", "fesnuk"],
   category: "download",
-  exec: async (m, { sock, query }) => {
-    if (!query) return m.reply(res.format(m.prefix, command, `https://facebook.com/..`));
-    if (!/facebook\.com|fb\.watch/i.test(query)) return m.adReply("Link tidak valid!");
+  exec: async (m, { sock, query, command }) => {
+    if (!query)
+      return m.reply(res.format(m.prefix, command, `https://facebook.com/..`));
+    if (!/facebook\.com|fb\.watch/i.test(query))
+      return m.adReply("Link tidak valid!");
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     const data = await fbDownloader(query);
 
     if (!data || data.links.length === 0) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-        return m.reply(res.error);
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
+      return m.reply(res.error);
     }
 
     const videoUrl = data.links[0].url;
     const quality = data.links[0].quality;
-      
-    await sock.sendMessage(m.from, {
+
+    await sock.sendMessage(
+      m.from,
+      {
         video: { url: videoUrl },
         caption: ``,
-        mimetype: "video/mp4"
-    }, { quoted: m });
+        mimetype: "video/mp4",
+      },
+      { quoted: m },
+    );
 
     await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-  }
+  },
 };

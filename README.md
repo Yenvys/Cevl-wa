@@ -25,8 +25,8 @@ Cevl adalah bot WhatsApp multi-fitur yang ditulis dalam Node.js menggunakan libr
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/Yenvys/bot-wa.git
-cd bot-wa
+git clone https://github.com/Yenvys/Cevl-wa.git
+cd Cevl-wa
 npm install
 ```
 
@@ -41,8 +41,6 @@ Edit file `.env` dan isi API keys:
 ```env
 GEMINI_API_KEY=your_gemini_api_key    # (Required) Google AI Studio
 PAIRING_NUMBER=628xxx                  # Nomor bot
-SERPAPI_KEY=xxx                        # (Optional) Search API
-WOLFRAM_APPID=xxx                      # (Optional) Wolfram Alpha
 PINTEREST_AUTH_COOKIE=xxx              # (Optional) Pinterest
 ```
 
@@ -77,7 +75,7 @@ pm2 save
 
 PM2 akan otomatis restart bot jika crash, dengan memory limit 500MB.
 
-## 📁 Struktur Folder
+## Struktur Folder
 
 ```
 ├── main.js              # Entry point

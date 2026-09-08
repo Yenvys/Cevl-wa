@@ -2,12 +2,12 @@
  * src/mbuilder.js
  * Helper wrapper untuk baileys-mbuilder (MessageBuilder)
  * Mempermudah pembuatan interactive messages: Button, ButtonV2, Carousel, AIRich
- * 
+ *
  * @see https://www.npmjs.com/package/baileys-mbuilder
  * @see https://gist.github.com/ValdazGT/adc8b767a082d18d12ff3e7f01b78651
  */
 
-import MBuilder from 'baileys-mbuilder';
+import MBuilder from "baileys-mbuilder";
 const { Button, ButtonV2, Carousel, AIRich, Toolkit } = MBuilder;
 
 // ==========================================
@@ -19,7 +19,7 @@ const { Button, ButtonV2, Carousel, AIRich, Toolkit } = MBuilder;
  * Mendukung: quick_reply, cta_url, cta_copy, single_select, send_location, cta_call, dll
  */
 export function createButton(sock) {
-    return new Button(sock);
+  return new Button(sock);
 }
 
 /**
@@ -27,7 +27,7 @@ export function createButton(sock) {
  * Lebih sederhana, tampilan berbeda dari native flow
  */
 export function createButtonV2(sock) {
-    return new ButtonV2(sock);
+  return new ButtonV2(sock);
 }
 
 /**
@@ -35,7 +35,7 @@ export function createButtonV2(sock) {
  * Setiap card harus punya image/video di header
  */
 export function createCarousel(sock) {
-    return new Carousel(sock);
+  return new Carousel(sock);
 }
 
 /**
@@ -44,7 +44,7 @@ export function createCarousel(sock) {
  * Bisa di-edit secara live (dynamic)
  */
 export function createAIRich(sock, options = {}) {
-    return new AIRich(sock, options);
+  return new AIRich(sock, options);
 }
 
 // ==========================================
@@ -59,19 +59,24 @@ export function createAIRich(sock, options = {}) {
  * @param {Array<{text: string, id: string}>} buttons - Array of button objects
  * @param {object} options - { title, footer, image }
  */
-export async function sendQuickReply(sock, jid, text, buttons = [], options = {}) {
-    const msg = createButton(sock)
-        .setBody(text);
-    
-    if (options.title) msg.setTitle(options.title);
-    if (options.footer) msg.setFooter(options.footer);
-    if (options.image) msg.setImage(options.image);
+export async function sendQuickReply(
+  sock,
+  jid,
+  text,
+  buttons = [],
+  options = {},
+) {
+  const msg = createButton(sock).setBody(text);
 
-    for (const btn of buttons) {
-        msg.addReply(btn.text || btn.display_text, btn.id);
-    }
+  if (options.title) msg.setTitle(options.title);
+  if (options.footer) msg.setFooter(options.footer);
+  if (options.image) msg.setImage(options.image);
 
-    return await msg.send(jid);
+  for (const btn of buttons) {
+    msg.addReply(btn.text || btn.display_text, btn.id);
+  }
+
+  return await msg.send(jid);
 }
 
 /**
@@ -83,18 +88,17 @@ export async function sendQuickReply(sock, jid, text, buttons = [], options = {}
  * @param {object} options - { title, footer, image }
  */
 export async function sendUrlButton(sock, jid, text, urls = [], options = {}) {
-    const msg = createButton(sock)
-        .setBody(text);
+  const msg = createButton(sock).setBody(text);
 
-    if (options.title) msg.setTitle(options.title);
-    if (options.footer) msg.setFooter(options.footer);
-    if (options.image) msg.setImage(options.image);
+  if (options.title) msg.setTitle(options.title);
+  if (options.footer) msg.setFooter(options.footer);
+  if (options.image) msg.setImage(options.image);
 
-    for (const u of urls) {
-        msg.addUrl(u.text || u.display_text, u.url);
-    }
+  for (const u of urls) {
+    msg.addUrl(u.text || u.display_text, u.url);
+  }
 
-    return await msg.send(jid);
+  return await msg.send(jid);
 }
 
 /**
@@ -106,37 +110,53 @@ export async function sendUrlButton(sock, jid, text, urls = [], options = {}) {
  * @param {Array<{title: string, rows: Array<{title: string, id: string, description?: string}>}>} sections
  * @param {object} options - { title, footer, image }
  */
-export async function sendSelection(sock, jid, text, listTitle, sections = [], options = {}) {
-    const msg = createButton(sock)
-        .setBody(text);
+export async function sendSelection(
+  sock,
+  jid,
+  text,
+  listTitle,
+  sections = [],
+  options = {},
+) {
+  const msg = createButton(sock).setBody(text);
 
-    if (options.title) msg.setTitle(options.title);
-    if (options.footer) msg.setFooter(options.footer);
-    if (options.image) msg.setImage(options.image);
+  if (options.title) msg.setTitle(options.title);
+  if (options.footer) msg.setFooter(options.footer);
+  if (options.image) msg.setImage(options.image);
 
-    msg.addSelection(listTitle);
-    for (const section of sections) {
-        msg.makeSection(section.title || '', section.highlight || '');
-        for (const row of (section.rows || [])) {
-            msg.makeRow(row.header || '', row.title || '', row.description || '', row.id || '');
-        }
+  msg.addSelection(listTitle);
+  for (const section of sections) {
+    msg.makeSection(section.title || "", section.highlight || "");
+    for (const row of section.rows || []) {
+      msg.makeRow(
+        row.header || "",
+        row.title || "",
+        row.description || "",
+        row.id || "",
+      );
     }
+  }
 
-    return await msg.send(jid);
+  return await msg.send(jid);
 }
 
 /**
  * Kirim copy button (salin teks ke clipboard)
  */
-export async function sendCopyButton(sock, jid, text, copyText, buttonLabel = '📋 Copy', options = {}) {
-    const msg = createButton(sock)
-        .setBody(text)
-        .addCopy(buttonLabel, copyText);
+export async function sendCopyButton(
+  sock,
+  jid,
+  text,
+  copyText,
+  buttonLabel = "📋 Copy",
+  options = {},
+) {
+  const msg = createButton(sock).setBody(text).addCopy(buttonLabel, copyText);
 
-    if (options.title) msg.setTitle(options.title);
-    if (options.footer) msg.setFooter(options.footer);
+  if (options.title) msg.setTitle(options.title);
+  if (options.footer) msg.setFooter(options.footer);
 
-    return await msg.send(jid);
+  return await msg.send(jid);
 }
 
 // Re-export original classes untuk advanced usage

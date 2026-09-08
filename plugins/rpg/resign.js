@@ -1,35 +1,39 @@
-import UserRPG from '../../src/rpg/schema.js';
-import { res } from '../../src/response.js';
+import UserRPG from "../../src/rpg/schema.js";
+import { res } from "../../src/response.js";
 
 export default {
-    cmd: ['resign', 'berhenti'],
-    category: 'rpg',
-    desc: 'Berhenti dari pekerjaanmu saat ini',
-    exec: async (m) => {
-        try {
-            const user = await UserRPG.findOne({ noWa: m.sender });
-            if (!user) return m.reply("_Kamu belum terdaftar! Silakan ketik .daftar terlebih dahulu._");
+  cmd: ["resign", "berhenti"],
+  category: "rpg",
+  desc: "Berhenti dari pekerjaanmu saat ini",
+  exec: async (m, { sock, command }) => {
+    try {
+      const user = await UserRPG.findOne({ noWa: m.sender });
+      if (!user)
+        return m.reply(
+          "_Kamu belum terdaftar! Silakan ketik .daftar terlebih dahulu._",
+        );
 
-            const currentJob = user.pekerjaan;
-            
-            if (!currentJob || currentJob.toLowerCase() === 'pengangguran') {
-                return m.reply("_Kamu saat ini tidak memiliki pekerjaan! Gunakan *.bursakerja* untuk mencari lowongan._");
-            }
+      const currentJob = user.pekerjaan;
 
-            // Set pekerjaan kembali ke default
-            user.pekerjaan = "Pengangguran";
-            await user.save();
+      if (!currentJob || currentJob.toLowerCase() === "pengangguran") {
+        return m.reply(
+          "_Kamu saat ini tidak memiliki pekerjaan! Gunakan *.bursakerja* untuk mencari lowongan._",
+        );
+      }
 
-            return m.reply(
-                `📝 *RESIGN BERHASIL*\n\n` +
-                `Kamu telah resmi berhenti dari pekerjaanmu sebagai *${currentJob}*.\n` +
-                `Sekarang kamu adalah seorang *Pengangguran*.\n\n` +
-                `_Gunakan *.bursakerja* jika ingin mencari pekerjaan baru._`
-            );
+      // Set pekerjaan kembali ke default
+      user.pekerjaan = "Pengangguran";
+      await user.save();
 
-        } catch (err) {
-            console.error('\x1b[1;31m[RESIGN ERROR]\x1b[0m', err);
-            m.reply(res.error);
-        }
+      return m.reply(
+        `📝 *RESIGN BERHASIL*\n\n` +
+          `Kamu telah resmi berhenti dari pekerjaanmu sebagai *${currentJob}*.\n` +
+          `Sekarang kamu adalah seorang *Pengangguran*.\n\n` +
+          `_Gunakan *.bursakerja* jika ingin mencari pekerjaan baru._`,
+      );
+    } catch (err) {
+      console.error("\x1b[1;31m[RESIGN ERROR]\x1b[0m", err);
+      m.reply(res.error);
     }
+  },
 };

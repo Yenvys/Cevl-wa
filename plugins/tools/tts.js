@@ -3,61 +3,75 @@
  * Credits to Google Translate TTS for text-to-speech API.
  */
 
+import fetch from "node-fetch";
+import { convertToOpus } from "../../src/helper.js";
+
 export default {
-    cmd: ['tts', 'tts?', 'gtts'],
-    category: 'tools',
-    desc: 'Convert text to speech audio',
-    exec: async (m, { sock, args, command }) => {
-        let lang = 'id';
-        let text = '';
+  cmd: ["tts", "gtts"],
+  category: "tools",
+  desc: "Convert text to speech audio",
+  exec: async (m, { sock, args, command }) => {
+    let lang = "id";
+    let text = "";
 
-        if (command.endsWith('?')) {
-            const helpText = [
-                "*♯ TEXT TO SPEECH (TTS)*",
-                `Gunakan \`${m.prefix}tts [kode_bahasa] [teks]\` atau \`${m.prefix}tts [teks]\`.`,
-                "> 💡 *Contoh:* `" + m.prefix + "tts en Hello world` atau `" + m.prefix + "tts Halo dunia`",
-            ];
-            return m.reply(helpText.join('\n'));
-        }
-
-        // Cek apakah argumen pertama adalah kode bahasa 2 huruf (misal: id, en, jp)
-        if (args.length > 0 && args[0].length === 2) {
-            lang = args[0].toLowerCase();
-            text = args.slice(1).join(' ');
-        } else {
-            text = args.join(' ');
-        }
-
-        // Ambil dari pesan yang di-quote jika teks kosong
-        if (!text && m.quoted && m.quoted.text) {
-            text = m.quoted.text;
-        }
-
-        text = text.replace(/[*_~`]/g, "").replace(/[\r\n]+/g, ". ").trim();
-
-        if (!text) return m.reply('❌ Teks tidak boleh kosong!');
-        if (text.length > 200) return m.reply('❌ Teks melebihi batas 200 karakter!');
-
-        try {
-            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
-            const res = await fetch(ttsUrl, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-            });
-
-            if (!res.ok) throw new Error(`TTS API error: ${res.status}`);
-
-            const buffer = await res.arrayBuffer();
-
-            return await sock.sendMessage(m.from, {
-                audio: Buffer.from(buffer),
-                mimetype: 'audio/mp4',
-                ptt: true
-            }, { quoted: m });
-        } catch (e) {
-            console.error('[TTS_ERR]', e);
-            return m.reply('❌ Gagal menghasilkan suara.');
-        }
+    // Cek jika argumen pertama adalah kode bahasa (misal: en, id, jp)
+    if (args.length >= 2 && args[0].length === 2) {
+      lang = args[0].toLowerCase();
+      text = args.slice(1).join(" ");
+    } else {
+      text = args.join(" ");
     }
+
+    // Jika tidak ada teks, coba ambil dari pesan yang di-reply
+    const quoted = m.quoted ? m.quoted : null;
+    if (!text && quoted?.text) {
+      text = quoted.text;
+    }
+
+    if (!text) {
+      return m.reply(
+        `*Cara Penggunaan:*\n> ${m.prefix}${command} [bahasa] [teks]\n\n*Contoh:*\n> ${m.prefix}${command} id Halo semuanya\n> ${m.prefix}${command} en Hello world\n\n_Catatan: Kode bahasa bersifat opsional (default: id). Kamu juga bisa me-reply pesan teks dengan perintah ini._`,
+      );
+    }
+
+    if (text.length > 250) {
+      return m.reply("_Teks terlalu panjang! Maksimal 250 karakter._");
+    }
+
+    await sock.sendMessage(m.from, { react: { text: "🗣️", key: m.key } });
+
+    try {
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+
+      // Download audio MP3 dari Google TTS sebagai buffer
+      const res = await fetch(ttsUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          Referer: "https://translate.google.com/",
+        },
+      });
+
+      if (!res.ok) throw new Error(`Google TTS HTTP ${res.status}`);
+
+      const mp3Buffer = Buffer.from(await res.arrayBuffer());
+
+      // Convert MP3 -> OGG Opus agar kompatibel di WA Mobile
+      const opusBuffer = await convertToOpus(mp3Buffer);
+
+      await sock.sendMessage(
+        m.from,
+        {
+          audio: opusBuffer,
+          mimetype: "audio/ogg; codecs=opus",
+          ptt: true,
+        },
+        { quoted: m },
+      );
+    } catch (e) {
+      console.error("[TTS_ERR]", e.message);
+      await m.reply("_Terjadi kesalahan saat memproses text-to-speech._");
+    }
+  },
 };
+

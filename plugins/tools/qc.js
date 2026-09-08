@@ -3,73 +3,87 @@
  * Quote Chat Generator using Local Puppeteer Rendering
  */
 
-import axios from 'axios';
-import { res } from '../../src/response.js';
-import db from '../../src/database.js';
+import axios from "axios";
+import { res } from "../../src/response.js";
+import db from "../../src/database.js";
 
 export default {
-    cmd: ['qc', 'quote'],
-    category: 'tools',
-    desc: 'Membuat stiker Quote Chat bergaya WhatsApp (Tanpa API Eksternal)',
-    
-    exec: async (m, { sock, args }) => {
-        const target = m.quoted ? m.quoted : m;
-        
-        let text = args.join(' ');
-        if (!text && m.quoted) {
-            text = m.quoted.text || m.quoted.body || m.quoted.query || '';
-        }
-        
-        const isImage = target.type === 'imageMessage' || (target.mimetype && target.mimetype.startsWith('image/'));
-        
-        if (!text && !isImage) {
-            return m.reply('_Kirim/Reply pesan (teks atau gambar) yang ingin dijadikan QC._');
-        }
+  cmd: ["qc", "quote"],
+  category: "tools",
+  desc: "Membuat stiker Quote Chat bergaya WhatsApp (Tanpa API Eksternal)",
 
-        await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
+  exec: async (m, { sock, args, command }) => {
+    const target = m.quoted ? m.quoted : m;
 
+    let text = args.join(" ");
+    if (!text && m.quoted) {
+      text = m.quoted.text || m.quoted.body || m.quoted.query || "";
+    }
+
+    const isImage =
+      target.type === "imageMessage" ||
+      (target.mimetype && target.mimetype.startsWith("image/"));
+
+    if (!text && !isImage) {
+      return m.reply(
+        "_Kirim/Reply pesan (teks atau gambar) yang ingin dijadikan QC._",
+      );
+    }
+
+    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
+
+    try {
+      // Get Target Info
+      const jid = target.sender;
+      let name = target.pushName;
+
+      if (!name) {
+        const contact = db
+          .prepare("SELECT pushname FROM contacts WHERE jid = ?")
+          .get(jid);
+        name =
+          contact && contact.pushname && contact.pushname !== "null"
+            ? contact.pushname
+            : jid.split("@")[0];
+      }
+
+      const time = new Date().toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      // Download quoted/attached image if available
+      let contentImgHtml = "";
+      if (isImage && target.download) {
         try {
-            // Get Target Info
-            const jid = target.sender;
-            let name = target.pushName;
-            
-            if (!name) {
-                const contact = db.prepare('SELECT pushname FROM contacts WHERE jid = ?').get(jid);
-                name = (contact && contact.pushname && contact.pushname !== 'null') ? contact.pushname : jid.split('@')[0];
-            }
+          const imgBuffer = await target.download();
+          if (imgBuffer) {
+            const mime = target.mimetype || "image/jpeg";
+            const contentBase64 = `data:${mime};base64,${imgBuffer.toString("base64")}`;
+            contentImgHtml = `<img src="${contentBase64}" style="width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 5px; object-fit: cover; display: block;" />`;
+          }
+        } catch (err) {
+          console.log("[QC_IMG_ERR]", err.message);
+        }
+      }
 
-            const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      // Get Profile Picture
+      let avatarUrl;
+      try {
+        avatarUrl = await sock.profilePictureUrl(jid, "image");
+      } catch (e) {
+        // Fallback default avatar
+        avatarUrl = "https://i.ibb.co/30Z3b14/profile.jpg";
+      }
 
-            // Download quoted/attached image if available
-            let contentImgHtml = '';
-            if (isImage && target.download) {
-                try {
-                    const imgBuffer = await target.download();
-                    if (imgBuffer) {
-                        const mime = target.mimetype || 'image/jpeg';
-                        const contentBase64 = `data:${mime};base64,${imgBuffer.toString('base64')}`;
-                        contentImgHtml = `<img src="${contentBase64}" style="width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 5px; object-fit: cover; display: block;" />`;
-                    }
-                } catch (err) {
-                    console.log('[QC_IMG_ERR]', err.message);
-                }
-            }
+      // Download image to base64
+      const { data: avatarBuffer } = await axios.get(avatarUrl, {
+        responseType: "arraybuffer",
+      });
+      const avatarBase64 = `data:image/jpeg;base64,${Buffer.from(avatarBuffer).toString("base64")}`;
 
-            // Get Profile Picture
-            let avatarUrl;
-            try {
-                avatarUrl = await sock.profilePictureUrl(jid, 'image');
-            } catch (e) {
-                // Fallback default avatar
-                avatarUrl = 'https://i.ibb.co/30Z3b14/profile.jpg';
-            }
-
-            // Download image to base64
-            const { data: avatarBuffer } = await axios.get(avatarUrl, { responseType: 'arraybuffer' });
-            const avatarBase64 = `data:image/jpeg;base64,${Buffer.from(avatarBuffer).toString('base64')}`;
-
-            // HTML Template
-            const html = `
+      // HTML Template
+      const html = `
             <html>
                 <head>
                     <style>
@@ -144,47 +158,52 @@ export default {
                             <div class="tail"></div>
                             <div class="name">${name.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
                             ${contentImgHtml}
-                            ${text ? `<div class="text">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>` : ''}
+                            ${text ? `<div class="text">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>` : ""}
                             <div class="time">${time}</div>
                         </div>
                     </div>
                 </body>
             </html>`;
 
-            // Import puppeteer dynamically
-            const puppeteer = (await import('puppeteer')).default;
+      // Import puppeteer dynamically
+      const puppeteer = (await import("puppeteer")).default;
 
-            const browser = await puppeteer.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
-                    '--disable-gpu'
-                ]
-            });
-            const page = await browser.newPage();
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process",
+          "--disable-gpu",
+        ],
+      });
+      const page = await browser.newPage();
 
-            try {
-                await page.setViewport({ width: 800, height: 800, deviceScaleFactor: 4 });
-                await page.setContent(html, { waitUntil: 'networkidle0' });
-                const element = await page.$('#qc-container');
-                const screenshotBuffer = await element.screenshot({ omitBackground: true });
-                
-                await sock.sendSticker(m.from, screenshotBuffer, m);
-                await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
-            } finally {
-                await browser.close();
-            }
+      try {
+        await page.setViewport({
+          width: 800,
+          height: 800,
+          deviceScaleFactor: 4,
+        });
+        await page.setContent(html, { waitUntil: "networkidle0" });
+        const element = await page.$("#qc-container");
+        const screenshotBuffer = await element.screenshot({
+          omitBackground: true,
+        });
 
-        } catch (err) {
-            console.error('[QC_ERROR]', err);
-            await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-            return m.reply(`_Gagal memproses QC:_ ${err.message}`);
-        }
+        await sock.sendSticker(m.from, screenshotBuffer, m);
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+      } finally {
+        await browser.close();
+      }
+    } catch (err) {
+      console.error("[QC_ERROR]", err);
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
+      return m.reply(`_Gagal memproses QC:_ ${err.message}`);
     }
+  },
 };
