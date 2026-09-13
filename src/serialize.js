@@ -281,6 +281,15 @@ export async function serialize(sock, m) {
     );
   };
 
+  m.react = (emoji) => {
+    return sock.sendMessage(m.from, {
+      react: {
+        text: emoji,
+        key: m.key,
+      },
+    });
+  };
+
   m.tree = (dir = ".") => {
     try {
       return execSync(`tree -I 'node_modules|.git|data*|tmp' ${dir}`)

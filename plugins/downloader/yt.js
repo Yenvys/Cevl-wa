@@ -240,7 +240,7 @@ export default {
                 if (fs.existsSync(rawFile)) fs.unlinkSync(rawFile);
                 if (fs.existsSync(compressedFile))
                   fs.unlinkSync(compressedFile);
-              } catch (e) {}
+              } catch (e) { }
             },
           );
         } else {
