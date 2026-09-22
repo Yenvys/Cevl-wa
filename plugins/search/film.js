@@ -553,7 +553,7 @@ export default {
   exec: async (m, { sock, query, command }) => {
     if (!query) {
       return m.reply(
-        `🎬 *Movie & Series Search*\nSearch and download movies/series from Akwam.\n *Usage:*\n.${command} <query>\n> Examples: ${command} Alone, ${command} Inception*`,
+        `🎬 *Movie & Series Search*\nSearch and download movies/series from Akwam.\n *Usage:*\n${m.prefix || "."}${command} <query>\n> Examples: ${command} Alone, ${command} Inception*`,
       );
     }
 

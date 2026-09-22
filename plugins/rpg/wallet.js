@@ -10,13 +10,13 @@ export default {
       const user = await UserRPG.findOne({ noWa: m.sender });
       if (!user)
         return m.reply(
-          "_Anda belum terdaftar. Silakan ketik .daftar terlebih dahulu._",
+          `_Anda belum terdaftar. Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
         );
 
       let teks = `『 *INFORMASI KEUANGAN* 』\n\n`;
       teks += `> 💵 *Dompet* : ${formatYen(user.yen)}\n`;
       teks += `> 🏦 *Bank* : ${formatYen(user.bank)}\n\n`;
-      teks += `_Gunakan perintah :_\n> _*.deposit* untuk menyimpan dana ke bank._\n> _*.withdraw* untuk mengambil dana dari bank_`;
+      teks += `_Gunakan perintah :_\n> _*${m.prefix || "."}deposit* untuk menyimpan dana ke bank._\n> _*${m.prefix || "."}withdraw* untuk mengambil dana dari bank_`;
 
       return m.reply(teks);
     } catch (err) {

@@ -9,7 +9,7 @@ export default {
       const user = await UserRPG.findOne({ noWa: m.sender });
       if (!user)
         return m.reply(
-          "_Anda belum terdaftar. Silakan ketik .daftar terlebih dahulu._",
+          `_Anda belum terdaftar. Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
         );
 
       if (user.stamina < 20)

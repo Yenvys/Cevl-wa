@@ -11,7 +11,7 @@ export default {
     const mime = (q.msg || q).mimetype || "";
 
     if (!/image/.test(mime))
-      return m.reply(`Kirim/reply gambar terus ketik .setpp.`);
+      return m.reply(`Kirim/reply gambar terus ketik ${m.prefix || "."}setpp.`);
 
     try {
       const { buffer } = await getMedia(m, sock);

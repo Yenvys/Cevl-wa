@@ -9,7 +9,7 @@ export default {
       const user = await UserRPG.findOne({ noWa: m.sender });
       if (!user)
         return m.reply(
-          "_Anda belum terdaftar. Silakan ketik .daftar terlebih dahulu._",
+          `_Anda belum terdaftar. Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
         );
 
       const action = command.toLowerCase();
@@ -17,7 +17,7 @@ export default {
 
       if (!amount)
         return m.reply(
-          `Contoh penggunaan:\n.${action} 1000 atau .${action} all`,
+          `Contoh penggunaan:\n${m.prefix || "."}${action} 1000 atau ${m.prefix || "."}${action} all`,
         );
 
       if (action === "deposit" || action === "nabung" || action === "dp") {

@@ -125,7 +125,7 @@ export default {
   exec: async (m, { sock, query, command }) => {
     if (!query) {
       return m.reply(
-        `🎵 *Apple Music Player*\n\nPlease provide a song name or artist.\n\nExample: .${command} Alone\n.${command} Marshmello Alone`,
+        `🎵 *Apple Music Player*\n\nPlease provide a song name or artist.\n\nExample: .${command} Alone\n${m.prefix || "."}${command} Marshmello Alone`,
       );
     }
 

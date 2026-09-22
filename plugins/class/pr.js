@@ -88,7 +88,7 @@ export default {
         teks += `   • Deadline : ${v.deadline}\n`;
         teks += `   • Detail   :\n ${v.detail}\n\n`;
       });
-      teks += `_Ketik .${command} del <nomor> untuk menghapus tugas._`;
+      teks += `_Ketik ${m.prefix || "."}${command} del <nomor> untuk menghapus tugas._`;
       return m.reply(teks);
     }
 

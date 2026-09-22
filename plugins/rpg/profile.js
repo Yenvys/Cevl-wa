@@ -10,7 +10,7 @@ export default {
       let user = await UserRPG.findOne({ noWa: m.sender });
       if (!user)
         return m.reply(
-          "_Kamu belum terdaftar! Silakan ketik .daftar terlebih dahulu._",
+          `_Kamu belum terdaftar! Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
         );
 
       user = await refreshUser(user);

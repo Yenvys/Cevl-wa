@@ -89,13 +89,13 @@ export default {
               const formattedAliases = aliases
                 .map((a) => `\`${a}\``)
                 .join(", ");
-              menuText += `> .${name} ${formattedAliases}\n`;
+              menuText += `> ${prefix || ""}${name} ${formattedAliases}\n`;
             } else {
-              menuText += `> .${name}\n`;
+              menuText += `> ${prefix || ""}${name}\n`;
             }
           });
         });
-        menuText += `\n_Tip:gunakan .menu <command> untuk melihat detail command._`;
+        menuText += `\n_Tip: gunakan ${prefix || ""}menu <command> untuk melihat detail command._`;
 
         return await m.reply(menuText.trim());
       }
@@ -124,7 +124,7 @@ export default {
 
         cmds.forEach((p, i) => {
           const name = Array.isArray(p.cmd) ? p.cmd[0] : p.cmd;
-          menuText += `> .${name} \n`;
+          menuText += `> ${prefix || ""}${name} \n`;
         });
 
         return await m.reply(menuText.trim());
@@ -137,7 +137,7 @@ export default {
       helpMsg += `> Alias : ${alias}\n`;
       helpMsg += `> Category : ${plugin.category || "Lainnya"}\n`;
       helpMsg += `> Desc : ${plugin.desc || "Gak ada deskripsi buat command ini."}\n\n`;
-      helpMsg += `_Tip: Gunakan *.menu* untuk melihat semua list command._`;
+      helpMsg += `_Tip: Gunakan *${prefix || ""}menu* untuk melihat semua list command._`;
 
       return await m.reply(helpMsg);
     }
@@ -147,8 +147,7 @@ export default {
     const greeting = getGreeting();
 
     const totalCmds = plugins.filter((p) => p.cmd).length;
-    let menuText = `*♯ MAIN MENU*\n`;
-    menuText += `> MODE : ${handler.mode.toUpperCase()}\n`;
+    let menuText = `> MODE : ${handler.mode.toUpperCase()}\n`;
     menuText += `> PREFIX : | ${prefix || "None"} |\n`;
     menuText += `> TOTAL : ${totalCmds} Commands\n`;
     menuText += `${readMore}\n`;
@@ -175,13 +174,107 @@ export default {
 
       cmds.forEach((p, i) => {
         const name = Array.isArray(p.cmd) ? p.cmd[0] : p.cmd;
-        menuText += `> .${name}\n`;
+        menuText += `> ${prefix || ""}${name}\n`;
       });
       menuText += ``;
     });
 
-    menuText += `\n_Tip: Gunakan .menu <command> untuk melihat detail command._`;
+    const fs = (await import("fs")).default;
+    const path = (await import("path")).default;
 
-    await m.reply(menuText.trim());
+    let thumbSource;
+    try {
+      thumbSource = fs.readFileSync(path.join(process.cwd(), "thumb.jpg"));
+    } catch (err) {
+      console.error("Gagal membaca thumb.jpg:", err);
+      // Placeholder transparan 1x1 jika thumb.jpg benar-benar tidak ada
+      thumbSource = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        "base64"
+      );
+    }
+
+    const { prepareWAMessageMedia } = await import("baileys");
+
+    let media;
+    try {
+      media = await prepareWAMessageMedia({ image: thumbSource }, { upload: sock.waUploadToServer });
+    } catch (e) {
+      console.error("Gagal prepare media:", e);
+      media = { imageMessage: null };
+    }
+
+    const interactivePayload = {
+      interactiveMessage: {
+        header: {
+          title: `*♯ MAIN MENU*`,
+          subtitle: greeting,
+          hasMediaAttachment: !!media?.imageMessage,
+        },
+        body: { text: menuText.trim() },
+        footer: { text: `gunakan ${prefix || ""}menu <command> untuk detail` },
+        contextInfo: {
+          mentionedJid: [m.sender],
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363401731165846@newsletter",
+            serverMessageId: 142,
+            newsletterName: "Cevl",
+          },
+        },
+        nativeFlowMessage: {
+          buttons: [
+            {
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({
+                display_text: "Channel",
+                url: "https://whatsapp.com/channel/0029Vb6O1mk6GcGKNYa8yC3J",
+                merchant_url: "https://whatsapp.com/channel/0029Vb6O1mk6GcGKNYa8yC3J",
+              }),
+            }
+          ],
+        },
+      },
+    };
+
+    if (media?.imageMessage) {
+      interactivePayload.interactiveMessage.header.imageMessage = media.imageMessage;
+    }
+
+    const isGroup = m.from.endsWith("@g.us");
+    let nodes = [
+      {
+        tag: "biz",
+        attrs: {},
+        content: [
+          {
+            tag: "interactive",
+            attrs: { type: "native_flow", v: "1" },
+            content: [
+              {
+                tag: "native_flow",
+                attrs: { v: "9", name: "mixed" },
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    if (!isGroup) {
+      nodes.push({ tag: "bot", attrs: { biz_bot: "1" } });
+    }
+
+    const msgId = sock.generateMessageID ? sock.generateMessageID() : "YENVY_BTN_" + Math.random().toString(36).substring(7).toUpperCase();
+
+    await sock.relayMessage(m.from, interactivePayload, {
+      messageId: msgId,
+      additionalNodes: nodes,
+    });
   },
 };
+
+
+
+
