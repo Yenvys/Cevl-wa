@@ -74,9 +74,11 @@ export default {
         );
       } else {
         await handler.changeAcTime("open", cronStr);
-        return m.reply(
-          `_Jadwal BUKA grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`,
-        );
+        let msg = `_Jadwal BUKA grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`;
+        if (days === "1-5") {
+          msg += `\n\n*Catatan:* Karena kamu mengatur buka hanya sampai Jumat (1-5), grup *TIDAK AKAN DIBUKA* pada hari Sabtu pagi setelah ditutup pada Jumat malam. Jika ingin grup tetap terbuka di akhir pekan, gunakan hari *1-6* untuk jadwal buka.`;
+        }
+        return m.reply(msg);
       }
     }
 
