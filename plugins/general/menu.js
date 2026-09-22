@@ -1,12 +1,8 @@
 /**
  * plugins/system/menu.js
  * Menampilkan daftar menu perintah bot (Universal Chat Style)
- * Menggunakan ButtonV2 dari baileys-mbuilder dengan thumbnail
  */
 import { config } from "../../config.js";
-import { createButtonV2 } from "../../src/mbuilder.js";
-
-const MENU_THUMBNAIL = "https://files.catbox.moe/r5qcku.jpg";
 
 const getGreeting = () => {
   const hour = parseInt(
@@ -184,14 +180,8 @@ export default {
       menuText += ``;
     });
 
-    const msg = createButtonV2(sock)
-      .setTitle("♯ Cevl")
-      .setSubtitle(`Hi! ${greeting} 👋 Im Cevl a simple WhatsApp bot.`)
-      .setBody(menuText.trim())
-      .setFooter("Tap button di bawah untuk melihat daftar owner")
-      .setThumbnail(MENU_THUMBNAIL)
-      .addButton("Contact Owner", ".owner list");
+    menuText += `\n_Tip: Gunakan .menu <command> untuk melihat detail command._`;
 
-    await msg.send(m.from);
+    await m.reply(menuText.trim());
   },
 };
