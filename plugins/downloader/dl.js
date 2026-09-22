@@ -520,7 +520,7 @@ export default {
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const apiUrl = `https://api.omegatech.app/api/download/All-downloader-v2?action=download&url=${encodeURIComponent(url)}`;
+      const apiUrl = `https://omegatech-api.dixonomega.tech/api/download/All-downloader-v2?action=download&url=${encodeURIComponent(url)}`;
       const { data } = await axios.get(apiUrl, { timeout: 60000 });
 
       if (!data.success) {

@@ -1,38 +1,59 @@
 /**
  * plugins/download/tiktok.js
- * Downloader TikTok (Universal Chat Style & Auto-Clear React)
+ * Downloader TikTok via SiputZX API v2
  */
-
-import { exec } from "child_process";
-import util from "util";
-import * as cheerio from "cheerio";
-import { config } from "../../config.js";
-
-const execPromise = util.promisify(exec);
 
 import axios from "axios";
 import { res } from "../../src/response.js";
 
-async function savetikScrape(url) {
+async function tiktokDL(url) {
   try {
-    const res = await axios.get(
-      `https://api.zellrayy.com/download/tiktok?url=${encodeURIComponent(url)}`,
+    const { data } = await axios.get(
+      `https://api.siputzx.my.id/api/d/tiktok/v2?url=${encodeURIComponent(url)}`,
+      { timeout: 60000 },
     );
-    const result = res.data?.result;
-    if (!result) return null;
 
-    return {
-      title: result.title || "TikTok Content",
-      links:
-        result.images && result.images.length > 0
-          ? result.images.map((img) => ({ text: "photo", link: img }))
-          : [
-              { text: "hd", link: result.hdplay || result.play },
-              { text: "sd", link: result.play },
-            ].filter((l) => l.link),
+    if (!data?.status || !data?.data) return null;
+
+    const d = data.data;
+    const result = {
+      title: d.text || "TikTok Content",
+      author: d.author_nickname || "Unknown",
+      cover: d.cover_link || null,
+      duration: d.duration || null,
+      stats: {
+        plays: d.play_count || 0,
+        likes: d.like_count || 0,
+        comments: d.comment_count || 0,
+        shares: d.share_count || 0,
+      },
+      links: [],
     };
+
+    // Cek slideshow (images)
+    if (d.slides && Array.isArray(d.slides) && d.slides.length > 0) {
+      result.links = d.slides.map((img) => ({ text: "photo", link: img }));
+    } else {
+      // Video links
+      if (d.no_watermark_link_hd) {
+        result.links.push({ text: "hd", link: d.no_watermark_link_hd });
+      }
+      if (d.no_watermark_link) {
+        result.links.push({ text: "sd", link: d.no_watermark_link });
+      }
+      if (d.watermark_link) {
+        result.links.push({ text: "wm", link: d.watermark_link });
+      }
+    }
+
+    // Music link
+    if (d.music_link) {
+      result.music = d.music_link;
+    }
+
+    return result;
   } catch (e) {
-    console.error("ZellRayy Scrape Error:", e.message);
+    console.error("[TT_API_ERR]", e.message);
     return null;
   }
 }
@@ -48,21 +69,31 @@ export default {
       );
     }
     if (!query.match(/tiktok\.com/gi)) {
-      return m.reply("Link tidak valid!");
+      return m.reply("❌ Link tidak valid!");
     }
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const data = await savetikScrape(query);
+      const data = await tiktokDL(query);
 
       if (!data || data.links.length === 0) {
         await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
         return m.reply(res.error);
       }
 
+      const contextInfo = {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: "120363401731165846@newsletter",
+          serverMessageId: 142,
+          newsletterName: "Cevl",
+        },
+      };
+
       let capt = `*TIKTOK DOWNLOADER*\n`;
-      capt += `> ${data.title}`;
+      capt += `> ${data.title?.substring(0, 200) || ""}`;
 
       const photoLinks = data.links.filter((l) =>
         l.text.toLowerCase().includes("photo"),
@@ -79,6 +110,7 @@ export default {
             {
               image: { url: photo.link },
               caption: "",
+              contextInfo,
             },
             { quoted: m },
           );
@@ -94,6 +126,7 @@ export default {
             video: { url: videoUrl },
             caption: capt,
             mimetype: "video/mp4",
+            contextInfo,
           },
           { quoted: m },
         );
