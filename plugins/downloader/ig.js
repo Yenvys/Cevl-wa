@@ -1,111 +1,43 @@
 /**
  * plugins/download/instagram.js
- * Downloader Instagram via SaveFromIns API
+ * Downloader Instagram via SiputZX API (sssinstagram + ummy fallback)
  */
 
 import axios from "axios";
 import { res } from "../../src/response.js";
 
-const BASE_URL = "https://api.savefromins.com";
-const AUTH = "20250901majwlqo";
-const DOMAIN = "api-ak.savefromins.com";
-const USER_AGENT =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-async function parse(url) {
-  const payload = new URLSearchParams();
-  payload.append("auth", AUTH);
-  payload.append("domain", DOMAIN);
-  payload.append("origin", "source");
-  payload.append("link", url);
-
-  const { data } = await axios.post(
-    `${BASE_URL}/api/contentsite_api/media/parse`,
-    payload.toString(),
-    {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT,
-        Origin: "https://savefromins.com",
-        Referer: "https://savefromins.com/",
-      },
-      timeout: 60000,
-    },
-  );
-  return data;
-}
-
-function collectResources(data) {
-  const videos = [];
-  const images = [];
-
-  if (Array.isArray(data.media)) {
-    for (const media of data.media) {
-      if (media.type === "video" && Array.isArray(media.resources)) {
-        for (const r of media.resources) {
-          if (r.format?.toLowerCase() === "mp4" && r.download_url) {
-            videos.push({
-              quality: r.quality || "default",
-              url: r.download_url,
-              size: r.size || 0,
-            });
-          }
-        }
-      }
-      if (media.type === "image" && Array.isArray(media.resources)) {
-        for (const r of media.resources) {
-          if (r.download_url) images.push({ url: r.download_url });
-        }
-      }
-    }
+async function igDL(url) {
+  // Primary: sssinstagram
+  try {
+    const { data } = await axios.get(
+      `https://api.siputzx.my.id/api/d/sssinstagram?url=${encodeURIComponent(url)}`,
+      { timeout: 60000 },
+    );
+    if (data?.status && data?.data) return data.data;
+  } catch (e) {
+    console.error("[IG_PRIMARY_ERR]", e.message);
   }
 
-  if (Array.isArray(data.resources)) {
-    for (const r of data.resources) {
-      const fmt = (r.format || "").toLowerCase();
-      if (fmt === "mp4" && r.download_url) {
-        videos.push({
-          quality: r.quality || "default",
-          url: r.download_url,
-          size: r.size || 0,
-        });
-      } else if (
-        (r.type === "image" ||
-          fmt === "jpg" ||
-          fmt === "jpeg" ||
-          fmt === "png") &&
-        r.download_url
-      ) {
-        images.push({ url: r.download_url });
-      }
-    }
+  // Backup: ummy
+  try {
+    const { data } = await axios.get(
+      `https://api.siputzx.my.id/api/d/ummy?url=${encodeURIComponent(url)}`,
+      { timeout: 60000 },
+    );
+    if (data?.status && data?.data) return data.data;
+  } catch (e) {
+    console.error("[IG_BACKUP_ERR]", e.message);
   }
 
-  const seen = new Set();
-  const dedupedVideos = videos.filter((v) => {
-    if (seen.has(v.url)) return false;
-    seen.add(v.url);
-    return true;
-  });
-
-  return { videos: dedupedVideos, images };
+  return null;
 }
 
-function pickBestVideo(videos) {
-  if (!videos.length) return null;
-  const order = {
-    "1080P": 6,
-    "960P": 5,
-    "720P": 4,
-    "480P": 3,
-    "360P": 2,
-    "240P": 1,
-  };
-  return videos.slice().sort((a, b) => {
-    const qa = order[(a.quality || "").toUpperCase()] || 0;
-    const qb = order[(b.quality || "").toUpperCase()] || 0;
-    return qb - qa;
-  })[0];
+function pickBestMedia(urlList) {
+  if (!urlList || !Array.isArray(urlList) || urlList.length === 0) return null;
+
+  // Sort by quality descending, pick highest
+  const sorted = urlList.slice().sort((a, b) => (b.quality || 0) - (a.quality || 0));
+  return sorted[0];
 }
 
 export default {
@@ -127,17 +59,10 @@ export default {
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const data = await parse(url);
+      const data = await igDL(url);
 
-      if (!data || data.status !== 1 || !data.data) {
-        throw new Error(data?.message || "Gagal memproses URL.");
-      }
-
-      const { videos, images } = collectResources(data.data);
-      const video = pickBestVideo(videos);
-
-      if (!video && !images.length) {
-        throw new Error("Media tidak ditemukan pada post ini.");
+      if (!data || (!data.url?.length && !data.sd && !data.hd)) {
+        throw new Error("Media tidak ditemukan.");
       }
 
       const contextInfo = {
@@ -150,56 +75,64 @@ export default {
         },
       };
 
-      if (video && video.url) {
-        const sizeText = video.size
-          ? `Size: ${(video.size / 1024 / 1024).toFixed(2)} MB\n`
-          : "";
-        const qualityText = video.quality
-          ? `Quality: ${video.quality}\n`
-          : "";
+      const meta = data.meta || {};
+      let capt = `*INSTAGRAM DOWNLOADER*\n`;
+      if (meta.username) capt += `> @${meta.username}\n`;
+      if (meta.title) capt += `> ${meta.title.substring(0, 200)}`;
 
-        await sock.sendMessage(
-          m.from,
-          {
-            video: { url: video.url },
-            caption: `*INSTAGRAM DOWNLOADER*\n\n${qualityText}${sizeText}`,
-            mimetype: "video/mp4",
-            contextInfo,
-          },
-          { quoted: m },
-        );
-      } else if (images.length === 1) {
-        await sock.sendMessage(
-          m.from,
-          {
-            image: { url: images[0].url },
-            caption: `*INSTAGRAM DOWNLOADER*`,
-            contextInfo,
-          },
-          { quoted: m },
-        );
-      } else {
-        for (let i = 0; i < images.length; i++) {
+      // Check if we have url array (video/photo items)
+      if (data.url && Array.isArray(data.url) && data.url.length > 0) {
+        const best = pickBestMedia(data.url);
+
+        if (!best) throw new Error("Media tidak ditemukan.");
+
+        const isVideo =
+          best.type === "mp4" ||
+          best.ext === "mp4" ||
+          best.name?.toLowerCase().includes("mp4");
+
+        if (isVideo) {
           await sock.sendMessage(
             m.from,
             {
-              image: { url: images[i].url },
-              caption:
-                i === 0
-                  ? `*INSTAGRAM DOWNLOADER* (${images.length} foto)`
-                  : "",
+              video: { url: best.url },
+              caption: capt,
+              mimetype: "video/mp4",
+              contextInfo,
+            },
+            { quoted: m },
+          );
+        } else {
+          await sock.sendMessage(
+            m.from,
+            {
+              image: { url: best.url },
+              caption: capt,
               contextInfo,
             },
             { quoted: m },
           );
         }
+      } else if (data.hd || data.sd) {
+        // Fallback to hd/sd fields
+        const videoUrl = data.hd || data.sd;
+        await sock.sendMessage(
+          m.from,
+          {
+            video: { url: videoUrl },
+            caption: capt,
+            mimetype: "video/mp4",
+            contextInfo,
+          },
+          { quoted: m },
+        );
       }
 
       await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
     } catch (e) {
       console.error("[IG_DL_ERR]", e);
       await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-      await m.reply("❌ " + (e.response?.data?.message || e.message));
+      await m.reply("❌ " + (e.message || "Gagal download media Instagram."));
     }
   },
 };
