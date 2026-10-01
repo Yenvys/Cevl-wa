@@ -319,11 +319,20 @@ export class Handler {
               config.thumbnailUrl || "https://i.ibb.co/3pYpxJp/profile.png";
           }
 
-          await sock.sendMessage(id, {
-            image: { url: pfpUrl },
-            caption: text,
-            mentions: [finalJid],
-          });
+          try {
+            await sock.sendMessage(id, {
+              image: { url: pfpUrl },
+              caption: text,
+              mentions: [finalJid],
+            });
+          } catch (err) {
+            this.log.error("WELCOME_IMG_ERR", err.message);
+            // Fallback: kirim teks saja jika gagal kirim gambar
+            await sock.sendMessage(id, {
+              text: text,
+              mentions: [finalJid],
+            });
+          }
         }
       } catch (e) {
         this.log.error("GP_UPDATE_ERR", e.message);

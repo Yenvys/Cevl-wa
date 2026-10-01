@@ -1177,7 +1177,7 @@ async function sendMusicPlayer(conn, m, html) {
  * ========================================================= */
 export default {
   cmd: ['play', 'playsf'],
-  category: 'downloader',
+  category: 'download',
   desc: 'Memutar dan mengunduh musik dari YouTube dengan player interaktif HTML Base64',
   exec: async (m, { sock, query, command, text, usedPrefix }) => {
     const conn = sock || m.conn

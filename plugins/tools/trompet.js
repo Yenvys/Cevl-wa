@@ -1002,7 +1002,7 @@ async function sendMusicPlayer(conn, m, html) {
  * ========================================================= */
 export default {
   cmd: ['trompet', 'trumpet', 'playtrompet'],
-  category: 'downloader',
+  category: 'download',
   desc: 'Memutar dan mengunduh instrumen trompet dengan player HTML gold',
   exec: async (m, { sock, query, command, text, usedPrefix }) => {
     const conn = sock || m.conn
