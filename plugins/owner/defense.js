@@ -1,131 +1,113 @@
-/**
- * Adapted from Ginko project (https://github.com/ginkohub/mushi)
- */
-
 import fs from "node:fs";
 import path from "node:path";
+import { res } from "../../src/response.js";
+import { getDefenseConfig } from "../../src/defender.js";
 
 const defenseFile = path.join(process.cwd(), "data", "defense.json");
 
-function getDefenseConfig() {
-  if (!fs.existsSync(defenseFile)) {
-    const defaultCfg = {
-      active: true,
-      allow_status: [
-        "extendedTextMessage",
-        "videoMessage",
-        "imageMessage",
-        "audioMessage",
-        "protocolMessage",
-        "senderKeyDistributionMessage",
-        "associatedChildMessage",
-        "reactionMessage",
-      ],
-    };
-    fs.writeFileSync(defenseFile, JSON.stringify(defaultCfg, null, 2));
-    return defaultCfg;
-  }
-  return JSON.parse(fs.readFileSync(defenseFile, "utf-8"));
+function saveDefenseConfig(cfg) {
+  fs.writeFileSync(defenseFile, JSON.stringify(cfg, null, 2));
 }
 
 export default {
-  cmd: ["defense", "defense+", "defense-", "skip", "skip+", "skip-", "smp"],
+  cmd: ["defense", "skip", "smp"],
   category: "owner",
-  desc: "Mengatur status pertahanan (Defense) bot",
+  desc: "Mengatur status sistem pertahanan (Defense) bot",
   exec: async (m, { command, args, sock }) => {
-    if (!m.isOwner) return m.reply("Perintah ini hanya untuk Owner bot.");
-
-    let config = getDefenseConfig();
+    if (!m.isOwner) return m.reply(res.owner);
+    const config = getDefenseConfig();
 
     if (command === "smp") {
       try {
-        const data = JSON.stringify(m, null, 2);
+        const data = Buffer.from(JSON.stringify(m, null, 2));
         const fileName = `${m.from}_${m.sender.split("@")[0]}_${Date.now()}.json`;
-
         return await sock.sendMessage(
           m.from,
           {
-            document: Buffer.from(data),
-            fileName: fileName,
+            document: data,
+            fileName,
             mimetype: "application/json",
-            caption: `*From* : ${m.pushName} (${m.sender})\n*Chat* : ${m.from}`,
+            caption: `*From* : ${m.pushName || "User"} (${m.sender})\n*Chat* : ${m.from}`,
           },
-          { quoted: m },
+          { quoted: m }
         );
-      } catch (e) {
-        return m.reply("Gagal membuat sample message.");
+      } catch {
+        return m.reply(res.error("Gagal membuat sample message."));
       }
     }
 
-    if (command.startsWith("defense")) {
-      if (command === "defense+") {
+    if (command === "defense") {
+      const action = (args[0] || "").toLowerCase();
+
+      if (["on", "enable", "1"].includes(action)) {
         config.active = true;
-        fs.writeFileSync(defenseFile, JSON.stringify(config, null, 2));
-      } else if (command === "defense-") {
-        config.active = false;
-        fs.writeFileSync(defenseFile, JSON.stringify(config, null, 2));
+        saveDefenseConfig(config);
+        return m.reply(res.success("Sistem pertahanan bot berhasil diaktifkan."));
       }
 
-      const status = config.active ? "Aktif" : "Tidak Aktif ⚠️";
-      let text = `*Status pertahanan* : *${status}*\n\n`;
-      text += `Catatan :\n`;
-      text += `  *${m.prefix}defense-* _untuk menonaktifkan_\n`;
-      text += `  *${m.prefix}defense+* _untuk mengaktifkan_`;
+      if (["off", "disable", "0"].includes(action)) {
+        config.active = false;
+        saveDefenseConfig(config);
+        return m.reply(res.success("Sistem pertahanan bot berhasil dinonaktifkan."));
+      }
 
-      return m.reply(text);
+      return m.reply(
+        res.format(
+          m.prefix,
+          `${command} <on/off>`,
+          ["on", "off"],
+          `Status pertahanan saat ini: ${config.active ? "Aktif" : "Nonaktif ⚠️"}`,
+          "Mengatur status sistem pertahanan (Defense) bot",
+        ),
+      );
     }
 
-    if (command.startsWith("skip")) {
-      let statusMsg = "";
+    if (command === "skip") {
+      const action = (args[0] || "").toLowerCase();
+      const typeArg = args[1];
 
-      if (command === "skip+") {
-        if (args.length === 0)
+      if (["add", "+"].includes(action)) {
+        if (!typeArg) {
           return m.reply(
-            `Harap masukkan tipe pesan. Contoh:\n*${m.prefix}skip+* audioMessage`,
+            res.format(
+              m.prefix,
+              "skip add <tipe>",
+              "audioMessage",
+              `Tipe aktif: ${config.allow_status.join(", ")}`,
+              "Menambahkan tipe pesan status WhatsApp yang diizinkan",
+            ),
           );
-        let added = false;
-        for (let type of args) {
-          if (!config.allow_status.includes(type)) {
-            config.allow_status.push(type);
-            added = true;
-          }
         }
-        if (added) {
-          fs.writeFileSync(defenseFile, JSON.stringify(config, null, 2));
-          statusMsg = "Berhasil menambahkan ke pengaturan\n\n";
+        if (!config.allow_status.includes(typeArg)) {
+          config.allow_status.push(typeArg);
+          saveDefenseConfig(config);
         }
-      } else if (command === "skip-") {
-        if (args.length === 0)
-          return m.reply(
-            `Harap masukkan tipe pesan. Contoh:\n*${m.prefix}skip-* audioMessage`,
-          );
-        let removed = false;
-        for (let type of args) {
-          const idx = config.allow_status.indexOf(type);
-          if (idx !== -1) {
-            config.allow_status.splice(idx, 1);
-            removed = true;
-          }
-        }
-        if (removed) {
-          fs.writeFileSync(defenseFile, JSON.stringify(config, null, 2));
-          statusMsg = "Berhasil menghapus dari pengaturan\n\n";
-        }
+        return m.reply(res.success(`Tipe pesan *${typeArg}* berhasil ditambahkan ke daftar izin status.`));
       }
 
-      let text = statusMsg;
-      text += `*# Tipe pesan yang diizinkan (Skip) di Status* :\n`;
-      for (let type of config.allow_status) {
-        text += `- \`${type}\`\n`;
+      if (["del", "delete", "remove", "-"].includes(action)) {
+        if (!typeArg) {
+          return m.reply(
+            res.format(
+              m.prefix,
+              "skip del <tipe>",
+              "audioMessage",
+              `Tipe aktif: ${config.allow_status.join(", ")}`,
+              "Menghapus tipe pesan status WhatsApp yang diizinkan",
+            ),
+          );
+        }
+        config.allow_status = config.allow_status.filter((t) => t !== typeArg);
+        saveDefenseConfig(config);
+        return m.reply(res.success(`Tipe pesan *${typeArg}* berhasil dihapus dari daftar izin status.`));
       }
 
-      text += `\nCatatan :\n`;
-      text += `  *${m.prefix}skip-* _untuk menghapus_\n`;
-      text += `  *${m.prefix}skip+* _untuk menambah_\n\n`;
-      text += `Contoh :\n`;
-      text += `  *${m.prefix}skip+ audioMessage imageMessage*`;
-
-      return m.reply(text);
+      const listFormatted = config.allow_status.map((t) => `> • \`${t}\``).join("\n");
+      return m.reply(
+        `*🛡️ DAFTAR TIPE PESAN STATUS DIIZINKAN*\n_Pesan status dengan tipe di bawah ini tidak akan diblokir oleh defender_\n\n` +
+          listFormatted +
+          `\n\n*Cara Mengatur:*\n> • \`${m.prefix}skip add <tipe>\` (Tambah izin)\n> • \`${m.prefix}skip del <tipe>\` (Hapus izin)`
+      );
     }
   },
 };

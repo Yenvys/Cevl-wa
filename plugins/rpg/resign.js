@@ -5,34 +5,24 @@ export default {
   cmd: ["resign", "berhenti"],
   category: "rpg",
   desc: "Berhenti dari pekerjaanmu saat ini",
-  exec: async (m, { sock, command }) => {
+  exec: async (m) => {
     try {
       const user = await UserRPG.findOne({ noWa: m.sender });
-      if (!user)
-        return m.reply(
-          `_Kamu belum terdaftar! Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
-        );
+      if (!user) return m.reply(`_Kamu belum terdaftar! Silakan ketik ${m.prefix ?? "."}daftar terlebih dahulu._`);
 
       const currentJob = user.pekerjaan;
-
       if (!currentJob || currentJob.toLowerCase() === "pengangguran") {
-        return m.reply(
-          "_Kamu saat ini tidak memiliki pekerjaan! Gunakan *.bursakerja* untuk mencari lowongan._",
-        );
+        return m.reply(`_Kamu saat ini tidak memiliki pekerjaan! Gunakan *${m.prefix ?? "."}bursakerja* untuk mencari lowongan._`);
       }
 
-      // Set pekerjaan kembali ke default
       user.pekerjaan = "Pengangguran";
       await user.save();
 
       return m.reply(
-        `📝 *RESIGN BERHASIL*\n\n` +
-          `Kamu telah resmi berhenti dari pekerjaanmu sebagai *${currentJob}*.\n` +
-          `Sekarang kamu adalah seorang *Pengangguran*.\n\n` +
-          `_Gunakan *.bursakerja* jika ingin mencari pekerjaan baru._`,
+        `📝 *RESIGN BERHASIL*\n\nKamu telah resmi berhenti dari pekerjaanmu sebagai *${currentJob}*.\nSekarang kamu adalah seorang *Pengangguran*.\n\n_Gunakan *${m.prefix ?? "."}bursakerja* jika ingin mencari pekerjaan baru._`
       );
     } catch (err) {
-      console.error("\x1b[1;31m[RESIGN ERROR]\x1b[0m", err);
+      console.error("[RESIGN ERROR]", err);
       m.reply(res.error);
     }
   },

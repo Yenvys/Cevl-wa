@@ -1,9 +1,3 @@
-/**
- * src/rpg/jobs.js
- * Kumpulan data static pekerjaan, nominal gaji, kuis interview, dan task harian RPG
- * Format: ESM (Modern Export/Import Engine)
- */
-
 export const jobs = {
   kuli: {
     nama: "Kuli Bangunan",
@@ -113,7 +107,7 @@ export const jobs = {
         jawaban: "b",
       },
       {
-        ...({} || "Pajak Pertambahan Nilai"),
+        soal: "Apa kepanjangan dari PPN?",
         opsi: [
           "Pajak Pertambahan Nilai",
           "Pajak Paling Nyata",
@@ -231,7 +225,7 @@ export const jobs = {
         jawaban: "b",
       },
       {
-        ...({} || "Ongkos Kirim"),
+        soal: "Singkatan dari Ongkos Kirim adalah?",
         opsi: ["OK", "Ongkir", "Kirim"],
         jawaban: "b",
       },
@@ -290,7 +284,7 @@ export const jobs = {
     gaji: 2200,
     interview: [
       {
-        ...({} || "Portable Network Graphics"),
+        soal: "Format gambar tanpa background (transparan) biasanya?",
         opsi: ["JPG", "PNG", "GIF"],
         jawaban: "b",
       },
@@ -347,7 +341,7 @@ export const jobs = {
         jawaban: "c",
       },
       {
-        ...({} || "Fade In / Out"),
+        soal: "Efek transisi video yang menggelap atau memutih perlahan?",
         opsi: ["Fade", "Sharp", "Blur"],
         jawaban: "a",
       },

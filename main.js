@@ -35,7 +35,6 @@ if (!fs.existsSync(customTemp)) {
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
-os.tmpdir = () => customTemp;
 
 // Validasi .env keys saat startup
 const envValidation = [
@@ -123,10 +122,6 @@ process.on("uncaughtException", (err) => {
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("WARN (Unhandled Rejection) at:", promise, "reason:", reason);
-  try {
-    store.writeToFileSync(storeFilePath);
-  } catch {}
-  process.exit(1);
 });
 
 main();

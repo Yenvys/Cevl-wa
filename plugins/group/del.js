@@ -4,11 +4,11 @@ export default {
   cmd: ["del", "delete"],
   category: "grup",
   desc: "Hapus pesan di grup (reply pesan yang ingin dihapus)",
-  exec: async (m, { sock, command }) => {
+  exec: async (m, { sock }) => {
     if (!m.isGroup) return m.reply(res.group);
-    if (!m.isOwner && !m.isAdmin) return m.reply("_kamu bukan admin/owner!_");
-    if (!m.isBotAdmin) return m.reply("_Bot bukan admin/owner!_");
-    if (!m.quoted) return m.reply("_Reply pesan yang ingin dihapus!_");
+    if (!m.isOwner && !m.isAdmin) return m.reply(res.admin);
+    if (!m.isBotAdmin) return m.reply(res.botAdmin);
+    if (!m.quoted) return m.reply(res.warn("Reply pesan yang ingin dihapus!"));
 
     try {
       await sock.sendMessage(m.from, {
@@ -19,8 +19,8 @@ export default {
           participant: m.quoted.sender,
         },
       });
-    } catch (e) {
-      m.adReply("Gagal hapus pesan! Pastikan bot adalah admin.");
+    } catch {
+      m.reply(res.error("Gagal menghapus pesan. Pastikan bot adalah admin grup."));
     }
   },
 };

@@ -1,109 +1,72 @@
-import {
-  getContentType,
-  jidNormalizedUser,
-  downloadMediaMessage,
-} from "baileys";
-import db, {
-  getLidMapping,
-  saveContact,
-  saveMetadata,
-  syncParticipants,
-} from "./database.js";
-import { config } from "../config.js";
-import { execSync } from "child_process";
+import { getContentType, jidNormalizedUser, downloadMediaMessage } from "baileys";
+import db, { getLidMapping, saveContact, saveMetadata, syncParticipants } from "./database.js";
+import fs from "node:fs";
+import path from "node:path";
 import { getMessageFromStoreById, groupCache } from "./helper.js";
 
-// Group metadata cache TTL: 5 menit
 const GROUP_CACHE_TTL = 300000;
+const VIEW_ONCE_TYPES = new Set(["viewOnceMessageV2", "viewOnceMessage", "ephemeralMessage"]);
+
+function unwrapMessage(msg) {
+  let content = msg;
+  while (content) {
+    const type = getContentType(content);
+    if (VIEW_ONCE_TYPES.has(type)) {
+      content = content[type]?.message || content[type];
+    } else break;
+  }
+  return content;
+}
 
 export async function serialize(sock, m) {
   if (!m) return m;
 
-  // IDENTIFICATION
   if (m.key) {
     m.id = m.key.id;
     m.from = jidNormalizedUser(m.key.remoteJid);
     m.isGroup = m.from.endsWith("@g.us");
     m.isNewsletter = m.from.endsWith("@newsletter");
 
-    let jid, lid;
-    if (m.isGroup) {
-      lid = m.key.participant;
-      if (lid && lid.endsWith("@lid")) {
-        const mapped = await getLidMapping(lid);
-        jid = mapped || lid;
-      } else jid = lid;
-    } else {
-      lid = m.from;
-      if (lid && lid.endsWith("@lid")) {
-        const mapped = await getLidMapping(lid);
-        jid = mapped || lid;
-      } else jid = lid;
+    let participant = m.isGroup ? m.key.participant : m.from;
+    if (participant?.endsWith("@lid")) {
+      participant = (await getLidMapping(participant)) || participant;
     }
-
-    m.sender = jidNormalizedUser(jid);
+    m.sender = jidNormalizedUser(participant);
     m.fromMe = m.key.fromMe;
   }
 
-  // CONTENT PROCESSING
   if (m.message) {
+    m.message = unwrapMessage(m.message) || m.message;
     m.type = getContentType(m.message);
     m.isViewOnce = ["viewOnceMessageV2", "viewOnceMessage"].includes(m.type);
 
-    if (m.isViewOnce || m.type === "ephemeralMessage") {
-      let unwrap = m.message[m.type];
-      m.message = unwrap?.message || unwrap;
-      m.type = getContentType(m.message);
-    }
-
     const msgContent = m.message[m.type] || {};
-    const contextInfo =
-      msgContent?.contextInfo ||
-      m.message?.extendedTextMessage?.contextInfo ||
-      {};
+    m.msg = msgContent;
+    m.mimetype = msgContent?.mimetype || "";
+    const contextInfo = msgContent?.contextInfo || m.message?.extendedTextMessage?.contextInfo || {};
 
-    m.newsletterName =
-      contextInfo?.forwardedNewsletterMessageInfo?.newsletterName || null;
+    m.newsletterName = contextInfo?.forwardedNewsletterMessageInfo?.newsletterName || null;
+    m.pushName = m.pushName || msgContent?.senderName || contextInfo?.externalAdReply?.title || "Unknown";
 
-    m.pushName =
-      m.pushName ||
-      msgContent?.senderName ||
-      contextInfo?.externalAdReply?.title ||
-      "Unknown";
-
-    let interactiveId = "";
-    if (m.type === "interactiveResponseMessage") {
+    let body = "";
+    if (m.type === "conversation") body = m.message.conversation;
+    else if (m.type === "extendedTextMessage") body = msgContent?.text;
+    else if (m.type === "imageMessage" || m.type === "videoMessage") body = msgContent?.caption;
+    else if (m.type === "templateButtonReplyMessage") body = msgContent?.selectedId;
+    else if (m.type === "buttonsResponseMessage") body = msgContent?.selectedButtonId;
+    else if (m.type === "listResponseMessage") body = msgContent?.singleSelectReply?.selectedRowId;
+    else if (m.type === "interactiveResponseMessage") {
       try {
-        const nativeReply = msgContent?.nativeFlowResponseMessage;
-        const paramsRaw =
-          nativeReply?.paramsJson || nativeReply?.responseJson || "";
-        const params = paramsRaw ? JSON.parse(paramsRaw) : {};
-        interactiveId = params?.id || nativeReply?.name || "";
+        const nf = msgContent?.nativeFlowResponseMessage;
+        const p = JSON.parse(nf?.paramsJson || nf?.responseJson || "{}");
+        body = p?.id || nf?.name || "";
       } catch {
-        interactiveId = "";
+        body = "";
       }
     }
+    m.body = body || "";
 
-    m.body =
-      (m.type === "conversation"
-        ? m.message.conversation
-        : m.type === "extendedTextMessage"
-          ? msgContent?.text
-          : ["imageMessage", "videoMessage"].includes(m.type)
-            ? msgContent?.caption
-            : m.type === "templateButtonReplyMessage"
-              ? msgContent?.selectedId
-              : m.type === "buttonsResponseMessage"
-                ? msgContent?.selectedButtonId
-                : m.type === "listResponseMessage"
-                  ? msgContent?.singleSelectReply?.selectedRowId
-                  : m.type === "interactiveResponseMessage"
-                    ? interactiveId
-                    : "") || "";
-
-    if (m.isNewsletter && m.newsletterName) {
-      m.groupName = m.newsletterName;
-    }
+    if (m.isNewsletter && m.newsletterName) m.groupName = m.newsletterName;
 
     m.args = m.body.trim().split(/ +/).slice(1);
     m.query = m.args.join(" ");
@@ -111,66 +74,42 @@ export async function serialize(sock, m) {
     m.mentionedJid = contextInfo?.mentionedJid || [];
     m.download = () => downloadMediaMessage(m, "buffer").catch(() => null);
 
-    const quotedMsgHeader = contextInfo?.quotedMessage;
-    if (quotedMsgHeader) {
+    const quotedHeader = contextInfo?.quotedMessage;
+    if (quotedHeader) {
       const stanzaId = contextInfo.stanzaId;
+      const qMessage = unwrapMessage(getMessageFromStoreById(stanzaId) || quotedHeader);
+      const qType = getContentType(qMessage);
+      const qMsg = qMessage?.[qType] || qMessage;
+
+      let qJid = contextInfo.participant;
+      if (qJid?.endsWith("@lid")) qJid = (await getLidMapping(qJid)) || qJid;
 
       m.quoted = {
         id: stanzaId,
         participant: contextInfo.participant,
-      };
-
-      let qMessage = getMessageFromStoreById(stanzaId);
-      if (!qMessage) {
-        qMessage = quotedMsgHeader;
-      }
-
-      while (true) {
-        const t = getContentType(qMessage);
-        if (
-          ["viewOnceMessageV2", "viewOnceMessage", "ephemeralMessage"].includes(
-            t,
-          )
-        ) {
-          qMessage = qMessage[t]?.message || qMessage[t];
-        } else break;
-      }
-
-      m.quoted.type = getContentType(qMessage);
-      m.quoted.isViewOnce = ["viewOnceMessageV2", "viewOnceMessage"].includes(
-        m.quoted.type,
-      );
-      m.quoted.message = qMessage;
-      m.quoted.msg = qMessage[m.quoted.type] || qMessage;
-      m.quoted.mimetype = m.quoted.msg?.mimetype || "";
-
-      m.quoted.text =
-        (m.quoted.type === "conversation"
-          ? qMessage.conversation
-          : m.quoted.type === "extendedTextMessage"
-            ? m.quoted.msg?.text
-            : ["imageMessage", "videoMessage"].includes(m.quoted.type)
-              ? m.quoted.msg?.caption
-              : "") || "";
-
-      let qRaw = contextInfo.participant;
-      let qJid = qRaw?.endsWith("@lid")
-        ? (await getLidMapping(qRaw)) || qRaw
-        : qRaw;
-      m.quoted.sender = jidNormalizedUser(qJid);
-
-      m.quoted.download = () =>
-        downloadMediaMessage(
-          {
-            key: {
-              remoteJid: m.from,
-              id: m.quoted.id,
-              participant: m.quoted.participant,
+        type: qType,
+        isViewOnce: ["viewOnceMessageV2", "viewOnceMessage"].includes(qType),
+        message: qMessage,
+        msg: qMsg,
+        mimetype: qMsg?.mimetype || "",
+        text:
+          qType === "conversation"
+            ? qMessage.conversation
+            : qType === "extendedTextMessage"
+              ? qMsg?.text
+              : ["imageMessage", "videoMessage"].includes(qType)
+                ? qMsg?.caption
+                : "",
+        sender: jidNormalizedUser(qJid),
+        download: () =>
+          downloadMediaMessage(
+            {
+              key: { remoteJid: m.from, id: stanzaId, participant: contextInfo.participant },
+              message: qMessage,
             },
-            message: m.quoted.message,
-          },
-          "buffer",
-        ).catch(() => null);
+            "buffer"
+          ).catch(() => null),
+      };
     }
   }
 
@@ -178,125 +117,92 @@ export async function serialize(sock, m) {
   m.isBotAdmin = false;
 
   if (m.isGroup) {
-    // Cached groupMetadata — hindari panggilan API berulang untuk grup yang sama
-    let metadata = null;
     const cached = groupCache.get(m.from);
-    if (cached && Date.now() - cached._cachedAt < GROUP_CACHE_TTL) {
-      metadata = cached;
-    } else {
+    let metadata = cached && Date.now() - cached._cachedAt < GROUP_CACHE_TTL ? cached : null;
+
+    if (!metadata) {
       metadata = await sock.groupMetadata(m.from).catch(() => null);
       if (metadata) {
         metadata._cachedAt = Date.now();
         groupCache.set(m.from, metadata);
+        setImmediate(() => {
+          saveMetadata(m.from, metadata.subject, metadata.desc?.toString(), metadata.participants);
+        });
       }
     }
-    if (metadata) {
-      const participants = metadata.participants || [];
-      m.groupName = metadata.subject;
 
+    if (metadata) {
+      m.groupName = metadata.subject;
       const botJid = jidNormalizedUser(sock.user.id);
       const senderJid = jidNormalizedUser(m.sender);
 
-      let userRecord = null;
-      let botRecord = null;
-
-      for (const p of participants) {
-        let pJid = p.id;
-        if (pJid.endsWith("@lid")) {
-          pJid = (await getLidMapping(pJid)) || pJid;
-        }
-        const normalizedParticipant = jidNormalizedUser(pJid);
-
-        if (normalizedParticipant === senderJid) userRecord = p;
-        if (normalizedParticipant === botJid) botRecord = p;
+      for (const p of metadata.participants || []) {
+        const pJid = jidNormalizedUser(p.id?.endsWith("@lid") ? (await getLidMapping(p.id)) || p.id : p.id);
+        const isAdmin = p.admin === "admin" || p.admin === "superadmin";
+        if (pJid === senderJid && isAdmin) m.isAdmin = true;
+        if (pJid === botJid && isAdmin) m.isBotAdmin = true;
       }
-
-      const checkAdminStatus = (p) =>
-        p?.admin === "admin" || p?.admin === "superadmin";
-      m.isAdmin = checkAdminStatus(userRecord);
-      m.isBotAdmin = checkAdminStatus(botRecord);
-
-      setImmediate(async () => {
-        await saveMetadata(
-          m.from,
-          metadata.subject,
-          metadata.desc?.toString(),
-          participants,
-        );
-        await syncParticipants(m.from, participants);
-      });
     }
   }
 
-  // HELPERS
-  setImmediate(async () => {
+  setImmediate(() => {
     if (m.sender && !m.fromMe) {
-      await saveContact(
-        m.sender,
-        m.key.participant?.endsWith("@lid") ? m.key.participant : null,
-        m.pushName,
-      );
+      saveContact(m.sender, m.key?.participant?.endsWith("@lid") ? m.key.participant : null, m.pushName);
     }
   });
 
   m.getResolvedText = (text) => {
     if (!text) return "";
-
     const matches = [...text.matchAll(/@(\d+)/g)];
     if (!matches.length) return text;
 
-    const jids = [...new Set(matches.map((m) => m[1] + "@s.whatsapp.net"))];
-    const placeholders = jids.map(() => "?").join(",");
-
-    const rows = db
-      .prepare(
-        `SELECT jid, pushname FROM contacts WHERE jid IN (${placeholders})`,
-      )
-      .all(...jids);
-    const contactMap = new Map();
-
-    for (const row of rows) {
-      if (row.pushname && row.pushname !== "null") {
-        contactMap.set(row.jid, row.pushname);
-      }
-    }
+    const jids = [...new Set(matches.map((v) => `${v[1]}@s.whatsapp.net`))];
+    const rows = db.prepare(`SELECT jid, pushname FROM contacts WHERE jid IN (${jids.map(() => "?").join(",")})`).all(...jids);
+    const map = new Map(rows.filter((r) => r.pushname && r.pushname !== "null").map((r) => [r.jid, r.pushname]));
 
     return text.replace(/@(\d+)/g, (match, p1) => {
-      const pushname = contactMap.get(p1 + "@s.whatsapp.net");
-      return pushname ? `@${pushname}` : match;
+      const name = map.get(`${p1}@s.whatsapp.net`);
+      return name ? `@${name}` : match;
     });
   };
 
-  m.reply = (text, options = {}) => {
-    return sock.sendMessage(
+  m.reply = (text, options = {}) =>
+    sock.sendMessage(
       m.from,
       {
         text: String(text),
-        mentions:
-          options.mentions ||
-          [...text.matchAll(/@(\d+)/g)].map((v) => v[1] + "@s.whatsapp.net"),
+        mentions: options.mentions || [...String(text).matchAll(/@(\d+)/g)].map((v) => `${v[1]}@s.whatsapp.net`),
         ...options,
       },
-      { quoted: m },
+      { quoted: m }
     );
-  };
 
-  m.react = (emoji) => {
-    return sock.sendMessage(m.from, {
-      react: {
-        text: emoji,
-        key: m.key,
-      },
-    });
-  };
+  m.react = (emoji) =>
+    sock.sendMessage(m.from, { react: { text: emoji, key: m.key } });
 
   m.tree = (dir = ".") => {
     try {
-      return execSync(`tree -I 'node_modules|.git|data*|tmp' ${dir}`)
-        .toString()
-        .trim();
+      const root = path.resolve(dir);
+      const build = (currentDir, prefix = "") => {
+        let res = "";
+        const items = fs
+          .readdirSync(currentDir, { withFileTypes: true })
+          .filter((i) => !/node_modules|\.git|data.*|tmp/i.test(i.name))
+          .sort((a, b) => (a.isDirectory() === b.isDirectory() ? a.name.localeCompare(b.name) : a.isDirectory() ? -1 : 1));
+
+        for (let idx = 0; idx < items.length; idx++) {
+          const item = items[idx];
+          const isLast = idx === items.length - 1;
+          res += `${prefix}${isLast ? "└── " : "├── "}${item.name}${item.isDirectory() ? "/" : ""}\n`;
+          if (item.isDirectory()) {
+            res += build(path.join(currentDir, item.name), prefix + (isLast ? "    " : "│   "));
+          }
+        }
+        return res;
+      };
+      return `${path.basename(root) || "."}/\n` + (build(root) || "(empty)");
     } catch {
-      return "Gagal";
+      return "Gagal membaca direktori";
     }
   };
 

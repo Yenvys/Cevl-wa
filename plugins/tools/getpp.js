@@ -1,17 +1,14 @@
 import { res } from "../../src/response.js";
 
-/**
- * plugins/tools/getpp.js
- * Mengambil foto profil pengguna WhatsApp (Universal Chat Style)
- */
+const DEFAULT_PP = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png";
 
 export default {
   cmd: ["getpp", "pp", "foto"],
   category: "tools",
-  desc: "Mengambil foto profil target.",
-  exec: async (m, { sock, command }) => {
-    let target = m.quoted ? m.quoted.sender : m.mentionedJid?.[0] || m.sender;
+  desc: "Mengambil foto profil target WhatsApp",
 
+  exec: async (m, { sock }) => {
+    const target = m.quoted ? m.quoted.sender : m.mentionedJid?.[0] || m.sender;
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
@@ -19,8 +16,7 @@ export default {
       try {
         ppUrl = await sock.profilePictureUrl(target, "image");
       } catch {
-        ppUrl =
-          "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png";
+        ppUrl = DEFAULT_PP;
       }
 
       await sock.sendMessage(
@@ -32,7 +28,6 @@ export default {
         },
         { quoted: m },
       );
-
       await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
     } catch (e) {
       console.error("[GETPP_ERR]", e);

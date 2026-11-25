@@ -1,18 +1,13 @@
-/**
- * plugins/ping.js
- * Cek respon bot akurat tanpa spam chat
- */
-
 import net from "node:net";
 import { performance } from "node:perf_hooks";
 
 export default {
   cmd: ["ping", "p", "tes"],
   category: "system",
-  exec: async (m, { sock, command }) => {
+  desc: "Cek respon bot dan latensi jaringan WhatsApp",
+  exec: async (m, { sock }) => {
     const startNet = performance.now();
 
-    // KONEKSI KE SERVER WA
     const checkNet = () =>
       new Promise((resolve) => {
         const socket = new net.Socket();
@@ -20,7 +15,7 @@ export default {
         socket.connect(443, "g.whatsapp.net", () => {
           const lat = performance.now() - startNet;
           socket.destroy();
-          resolve(lat.toFixed(0));
+          resolve(`${lat.toFixed(0)}ms`);
         });
         socket.on("error", () => {
           socket.destroy();
@@ -36,16 +31,13 @@ export default {
     const startMsg = performance.now();
     const pingMsg = await sock.sendMessage(
       m.from,
-      {
-        text: ` *Koneksi wea: ${netLatency}ms* \n *respon: Measuring..* `,
-      },
-      { quoted: m },
+      { text: `*Koneksi wea: ${netLatency}*\n*respon: Measuring..*` },
+      { quoted: m }
     );
 
     const rtt = (performance.now() - startMsg).toFixed(0);
-
     await sock.sendMessage(m.from, {
-      text: ` *Koneksi wea: ${netLatency}ms* \n *respon latency: ${rtt}ms* `,
+      text: `*Koneksi wea: ${netLatency}*\n*respon latency: ${rtt}ms*`,
       edit: pingMsg.key,
     });
   },

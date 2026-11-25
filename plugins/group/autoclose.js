@@ -1,45 +1,29 @@
-/**
- * plugins/owner/autoclose.js
- * Manajemen & Scheduler Otomatis Penutupan Jam Malam Grup
- */
-
 import { updateGroupSettings, getAutoCloseGroups } from "../../src/database.js";
 import { res } from "../../src/response.js";
 
 export default {
   cmd: ["autoclose", "ac"],
   category: "grup",
-  desc: "Pengaturan grup khusus untuk fitur Auto Close / Open",
-  exec: async (m, { sock, args, command, handler }) => {
-    if (!m.isOwner && !m.isAdmin) return m.reply("_kamu bukan admin/owner!_");
+  desc: "Pengaturan grup untuk fitur Auto Close / Open",
+  exec: async (m, { args, command, handler }) => {
+    if (!m.isOwner && !m.isAdmin) return m.reply(res.admin);
 
     const opt = args[0]?.toLowerCase();
+
     if (opt === "add" && m.isGroup) {
-      await updateGroupSettings(m.from, "autoclose", 1);
-      return m.reply(
-        "_Sukses memasukkan grup ini ke dalam daftar jadwal Autoclose._",
-      );
+      updateGroupSettings(m.from, "autoclose", 1);
+      return m.reply("_Sukses memasukkan grup ini ke dalam daftar jadwal Autoclose._");
     }
 
     if ((opt === "del" || opt === "off") && m.isGroup) {
-      await updateGroupSettings(m.from, "autoclose", 0);
-      return m.reply(
-        "_Sukses menghapus grup ini dari daftar jadwal Autoclose._",
-      );
+      updateGroupSettings(m.from, "autoclose", 0);
+      return m.reply("_Sukses menghapus grup ini dari daftar jadwal Autoclose._");
     }
 
     if (opt === "list") {
-      const list = await getAutoCloseGroups();
-      if (!list.length)
-        return m.reply(
-          "_Tidak ada grup yang terdaftar dalam jam malam saat ini._",
-        );
-
-      let txt = `⌗ *DAFTAR GRUP AUTO CLOSE*\n\n`;
-      list.forEach((v, i) => {
-        txt += `${i + 1}. ${v.name || v.jid}\n`;
-      });
-      return m.reply(txt.trim());
+      const list = getAutoCloseGroups();
+      if (!list.length) return m.reply("_Tidak ada grup yang terdaftar dalam jam malam saat ini._");
+      return m.reply(`⌗ *DAFTAR GRUP AUTO CLOSE*\n\n${list.map((v, i) => `${i + 1}. ${v.name || v.jid}`).join("\n")}`);
     }
 
     if (opt === "start") {
@@ -49,56 +33,49 @@ export default {
 
     if (opt === "stop") {
       await handler.changeFeature("autoclose", false);
-      return m.reply(
-        "_Sistem jam malam berhasil dinonaktifkan secara global._",
-      );
+      return m.reply("_Sistem jam malam berhasil dinonaktifkan secara global._");
     }
 
     if (opt === "setclose" || opt === "setopen") {
-      const time = args[1]; // HH:MM
-      const days = args[2] || "*"; // Optional days (e.g. 1-5)
+      const time = args[1];
+      const days = args[2] || "*";
 
       if (!/^\d{2}:\d{2}$/.test(time || "")) {
-        return m.reply(
-          `_Format salah! Gunakan: ${m.prefix}${command} ${opt} HH:MM [hari]\nContoh:\n- ${m.prefix}${command} ${opt} 22:30\n- ${m.prefix}${command} ${opt} 22:30 1-5_`,
-        );
+        return m.reply(res.format(m.prefix, `${command} ${opt}`, "22:30 1-5", "Format waktu HH:MM [hari 1-5 / 1-7]"));
       }
 
       const [hh, mm] = time.split(":");
-      const cronStr = `${parseInt(mm)} ${parseInt(hh)} * * ${days}`;
+      const cronStr = `${parseInt(mm, 10)} ${parseInt(hh, 10)} * * ${days}`;
 
       if (opt === "setclose") {
         await handler.changeAcTime("close", cronStr);
-        return m.reply(
-          `_Jadwal TUTUP grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`,
-        );
+        return m.reply(`_Jadwal TUTUP grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`);
       } else {
         await handler.changeAcTime("open", cronStr);
         let msg = `_Jadwal BUKA grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`;
         if (days === "1-5") {
-          msg += `\n\n*Catatan:* Karena kamu mengatur buka hanya sampai Jumat (1-5), grup *TIDAK AKAN DIBUKA* pada hari Sabtu pagi setelah ditutup pada Jumat malam. Jika ingin grup tetap terbuka di akhir pekan, gunakan hari *1-6* untuk jadwal buka.`;
+          msg += `\n\n*Catatan:* Jika mengatur buka 1-5 (Senin-Jumat), grup tidak akan dibuka Sabtu pagi setelah tutup Jumat malam. Gunakan 1-6 jika ingin buka Sabtu pagi.`;
         }
         return m.reply(msg);
       }
     }
 
-    if (!opt) {
-      let helpText = `⌗ *MANAJEMEN AUTO CLOSE GRUP*\n\n`;
-      helpText += `*Status Master:* ${handler.autoclose ? "✅ AKTIF" : "❌ NONAKTIF"}\n`;
-      helpText += `*Waktu Tutup (Cron):* ${handler.ac_closeCron}\n`;
-      helpText += `*Waktu Buka (Cron):* ${handler.ac_openCron}\n\n`;
-      helpText += `*Daftar Opsi Perintah:*\n`;
-      helpText += `│ ◦ ${m.prefix}${command} add - Daftarkan grup ini ke jadwal\n`;
-      helpText += `│ ◦ ${m.prefix}${command} del - Hapus grup ini dari jadwal\n`;
-      helpText += `│ ◦ ${m.prefix}${command} list - Lihat seluruh daftar grup\n`;
-      helpText += `│ ◦ ${m.prefix}${command} start - Aktifkan cron global\n`;
-      helpText += `│ ◦ ${m.prefix}${command} stop - Matikan cron global\n`;
-      helpText += `│ ◦ ${m.prefix}${command} setclose HH:MM [hari] - Ubah jam tutup\n`;
-      helpText += `│ ◦ ${m.prefix}${command} setopen HH:MM [hari] - Ubah jam buka\n`;
-      helpText += `╰───────────────────────────\n\n`;
-      helpText += `*Catatan Hari (Opsional):*\n> 0 = Minggu, 1 = Senin, ... 6 = Sabtu. \n> Jika dikosongkan, maka setiap hari (*).`;
-
-      return m.reply(helpText);
-    }
+    return m.reply(
+      res.format(
+        m.prefix,
+        `${command} <opsi>`,
+        [
+          "add",
+          "del",
+          "list",
+          "start",
+          "stop",
+          "setclose 22:30 1-5",
+          "setopen 05:00 1-5",
+        ],
+        `Status: ${handler.autoclose ? "Aktif" : "Nonaktif"} | Tutup: ${handler.ac_closeCron} | Buka: ${handler.ac_openCron}`,
+        "Manajemen jadwal buka dan tutup grup otomatis",
+      ),
+    );
   },
 };

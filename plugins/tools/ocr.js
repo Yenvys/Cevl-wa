@@ -13,22 +13,16 @@ const MIME_MAP = {
 
 async function ocrSpace(buffer, mime, lang = "eng", engine = 5) {
   try {
-    const base64Data = `data:${mime};base64,${buffer.toString("base64")}`;
-
-    const { data: body } = await axios.post(
+    const { data } = await axios.post(
       "https://api.rifkyshre.biz.id/ocr/space",
       {
-        base64: base64Data,
+        base64: `data:${mime};base64,${buffer.toString("base64")}`,
         language: lang,
         ocrEngine: engine,
       },
-      {
-        timeout: 120000,
-        headers: { "Content-Type": "application/json" },
-      },
+      { timeout: 120000, headers: { "Content-Type": "application/json" } },
     );
-
-    return body;
+    return data;
   } catch (e) {
     return { status: false, error: e.message };
   }
@@ -37,11 +31,10 @@ async function ocrSpace(buffer, mime, lang = "eng", engine = 5) {
 export default {
   cmd: ["ocr", "scantext", "baca-gambar"],
   category: "tools",
-  desc: "Mengekstrak teks didalam gambar atau dokumen PDF",
+  desc: "Mengekstrak teks di dalam gambar atau dokumen PDF",
 
   exec: async (m, { sock, args, command }) => {
-    // Cek apakah ada media yang dikirim langsung atau lewat quote/reply
-    const quoted = m.quoted ? m.quoted : m;
+    const quoted = m.quoted || m;
     const mimeType = (quoted.msg || quoted).mimetype || "";
 
     if (!mimeType) {
@@ -49,63 +42,45 @@ export default {
         res.format(
           m.prefix,
           command,
-          `\n\n_Kirim gambar atau reply gambar/PDF dengan caption perintah_\n\n*Opsi Bahasa (Opsional):*\n> .ocr ind (Teks Indo)\n> .ocr eng (Teks Inggris)`,
+          "ind",
+          "Kirim atau reply gambar/PDF. Opsi: ind (Indonesia), eng (Inggris)",
         ),
       );
     }
 
     const targetMime = MIME_MAP[mimeType];
     if (!targetMime) {
-      return m.reply(
-        `_Format berkas media tidak didukung! Sistem hanya menerima ekstensi: JPG, JPEG, PNG, WEBP, BMP, TIF, atau PDF._`,
-      );
+      return m.reply(res.warn("Format tidak didukung! Format diterima: JPG, JPEG, PNG, WEBP, BMP, TIF, PDF."));
     }
 
-    // Atur bahasa deteksi (Default: eng, jika dimasukkan parameter seperti 'ind' maka akan berubah)
-    const customLang = args[0]?.toLowerCase() || "eng";
-
+    const lang = args[0]?.toLowerCase() || "eng";
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      // Download biner media langsung dari WhatsApp server hulu
       const mediaBuffer = await downloadMediaMessage(
         quoted,
         "buffer",
         {},
-        {
-          logger: console,
-          reconnectMode: "always",
-        },
+        { logger: console, reconnectMode: "always" },
       );
+      if (!mediaBuffer) throw new Error("Gagal mengambil media dari server.");
 
-      if (!mediaBuffer) {
-        throw new Error("Gagal mengambil biner buffer dari WhatsApp server.");
-      }
-
-      // Hit ke API Shre OCR
-      const response = await ocrSpace(mediaBuffer, targetMime, customLang, 5);
-
-      if (!response || !response.status) {
+      const response = await ocrSpace(mediaBuffer, targetMime, lang, 5);
+      if (!response?.status) {
         await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-        return m.reply(
-          `_Gagal memproses OCR. Log:* \`\`\`${response?.error || "Respons API tidak valid."}\`\`\``,
-        );
+        return m.reply(res.error(`Gagal memproses OCR: ${response?.error || "Respons API tidak valid."}`));
       }
 
-      const d = response.data;
-      if (!d.text || !d.text.trim()) {
+      const text = response.data?.text?.trim();
+      if (!text) {
         await sock.sendMessage(m.from, { react: { text: "⚠", key: m.key } });
-        return m.reply(
-          `_Sistem berhasil memindai media, namun tidak ada karakter teks atau tulisan yang terdeteksi._`,
-        );
+        return m.reply(res.empty("Media berhasil dipindai, tetapi tidak ada karakter teks yang terdeteksi."));
       }
-
-      const teksHasil = d.text.trim();
 
       await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
-      return m.reply(teksHasil);
+      return m.reply(text);
     } catch (err) {
-      console.error(err);
+      console.error("[OCR_ERR]", err);
       await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
       return m.reply(res.error);
     }

@@ -5,45 +5,36 @@ import { res } from "../../src/response.js";
 export default {
   cmd: ["me", "stat", "profile"],
   category: "rpg",
-  exec: async (m, { sock, command }) => {
+  desc: "Cek profil dan status statistik RPG kamu",
+  exec: async (m) => {
     try {
       let user = await UserRPG.findOne({ noWa: m.sender });
-      if (!user)
-        return m.reply(
-          `_Kamu belum terdaftar! Silakan ketik ${m.prefix || "."}daftar terlebih dahulu._`,
-        );
+      if (!user) return m.reply(`_Kamu belum terdaftar! Silakan ketik ${m.prefix ?? "."}daftar terlebih dahulu._`);
 
       user = await refreshUser(user);
-
       const currentExp = Number(user.exp || 0);
-      const currentYen = Number(user.yen || 0);
-      const currentBank = Number(user.bank || 0);
-
       const xpNeeded = user.level * 100;
       const progress = Math.min((currentExp / xpNeeded) * 100, 100);
 
       let displayStatus = "BEBAS";
       try {
-        const parsedStatus = JSON.parse(user.statusBermain);
-        if (parsedStatus && parsedStatus.mode) {
-          displayStatus = parsedStatus.mode.toUpperCase();
-        }
+        const parsed = JSON.parse(user.statusBermain);
+        if (parsed?.mode) displayStatus = parsed.mode.toUpperCase();
       } catch {
-        if (user.statusBermain) {
-          displayStatus = user.statusBermain.split("|")[0].toUpperCase();
-        }
+        if (user.statusBermain) displayStatus = user.statusBermain.split("|")[0].toUpperCase();
       }
 
-      let teks = `『 👤 *USER STATUS* 』\n\n`;
-      teks += `> 👤 *Nama* : ${m.pushName || "Anonim"}\n`;
-      teks += `> 🏷️ *Profesi* : ${user.pekerjaan}\n`;
-      teks += `> 🆙 *Level* : ${user.level}\n`;
-      teks += `> ✨ *XP* : ${currentExp} / ${xpNeeded} (${progress.toFixed(1)}%)\n`;
-      teks += `> ⚡ *Stamina* : ${user.stamina} / 100\n`;
-      teks += `> 💵 *Dompet* : ${formatYen(currentYen)}\n`;
-      teks += `> 🏦 *Bank* : ${formatYen(currentBank)}\n`;
-      teks += `───────────────────\n`;
-      teks += `> 🎮 *Status* : ${displayStatus}\n`;
+      const teks =
+        `『 👤 *USER STATUS* 』\n\n` +
+        `> 👤 *Nama* : ${m.pushName || "Anonim"}\n` +
+        `> 🏷️ *Profesi* : ${user.pekerjaan}\n` +
+        `> 🆙 *Level* : ${user.level}\n` +
+        `> ✨ *XP* : ${currentExp} / ${xpNeeded} (${progress.toFixed(1)}%)\n` +
+        `> ⚡ *Stamina* : ${user.stamina} / 100\n` +
+        `> 💵 *Dompet* : ${formatYen(user.yen)}\n` +
+        `> 🏦 *Bank* : ${formatYen(user.bank)}\n` +
+        `───────────────────\n` +
+        `> 🎮 *Status* : ${displayStatus}\n`;
 
       return m.reply(teks);
     } catch (e) {

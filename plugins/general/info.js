@@ -1,59 +1,44 @@
-/**
- * plugins/system/info.js
- * Menampilkan informasi detail spesifikasi server bot (Universal Chat Style)
- */
-
-import os from "os";
+import os from "node:os";
 
 const formatBytes = (bytes) => {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  if (!bytes) return "0 B";
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / 1024 ** i).toFixed(2)} ${["B", "KB", "MB", "GB", "TB"][i]}`;
 };
 
 const formatUptime = (seconds) => {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const parts = [];
-  if (d > 0) parts.push(`${d} hari`);
-  if (h > 0) parts.push(`${h} jam`);
-  if (m > 0) parts.push(`${m} menit`);
-  if (s > 0) parts.push(`${s} detik`);
-  return parts.join(" ") || "0 detik";
+  const s = Math.floor(seconds);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [d && `${d} hari`, h && `${h} jam`, m && `${m} menit`, `${sec} detik`].filter(Boolean).join(" ");
 };
 
 export default {
   cmd: ["stats", "info", "i"],
   category: "system",
   desc: "Menampilkan informasi detail spesifikasi bot",
-  exec: async (m, { sock, command }) => {
-    const uptime = process.uptime();
-    const osUptime = os.uptime();
-    const memUsage = process.memoryUsage();
-    const cpus = os.cpus();
+  exec: async (m) => {
     const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-    const usedMem = totalMem - freeMem;
+    const usedMem = totalMem - os.freemem();
+    const cpus = os.cpus();
 
     const infoText = `*♯ SYSTEM STATS*
 > Hostname : ${os.hostname()}
 > OS : ${os.type()} ${os.release()}
 > Platform : ${os.platform()}
-> OS Uptime : ${formatUptime(osUptime)}
+> OS Uptime : ${formatUptime(os.uptime())}
 *♯ CPU & MEMORY*
 > CPU Model : ${cpus[0]?.model?.trim() || "Unknown"}
 > CPU Cores : ${cpus.length} core(s)
 > RAM Total : ${formatBytes(totalMem)}
 > RAM Used : ${formatBytes(usedMem)}
-> Mem Ussage  : ${formatBytes(memUsage.rss)}
+> Mem Usage : ${formatBytes(process.memoryUsage().rss)}
 *♯ RUNTIME*
 > Node.js : ${process.version}
 > V8 Engine : ${process.versions.v8}
-> Bot Time : ${formatUptime(uptime)}`.trim();
+> Bot Time : ${formatUptime(process.uptime())}`.trim();
 
     await m.reply(infoText);
   },

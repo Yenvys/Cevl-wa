@@ -3,16 +3,16 @@ import { res } from "../../src/response.js";
 export default {
   cmd: ["hidetag", "ht", "pengumuman"],
   category: "grup",
-  desc: "Tag semua member secara sembunyi (Hanya Admin/Owner)",
-  exec: async (m, { sock, args, command }) => {
+  desc: "Tag semua member secara tersembunyi (Admin/Owner)",
+  exec: async (m, { sock, args }) => {
     if (!m.isGroup) return m.reply(res.group);
-    if (!m.isAdmin && !m.isOwner) return m.reply("_kamu bukan admin/owner!_");
+    if (!m.isAdmin && !m.isOwner) return m.reply(res.admin);
 
     let target = m;
     let text = args.join(" ");
 
     if (!text && m.quoted) {
-      text = m.quoted.text || m.quoted.body || m.quoted.caption || "";
+      text = m.quoted.text || m.quoted.body || "";
       target = m.quoted;
     }
     if (!text) text = "📢 Pengumuman!";
@@ -21,29 +21,22 @@ export default {
       const groupMetadata = await sock.groupMetadata(m.from);
       const mentions = groupMetadata.participants.map((v) => v.id);
 
-      const isMedia =
-        target.mimetype &&
-        (target.mimetype.startsWith("image/") ||
-          target.mimetype.startsWith("video/"));
+      const mime = target.mimetype || "";
+      const isMedia = /image|video/.test(mime);
 
       if (isMedia && target.download) {
-        try {
-          const media = await target.download();
-          if (media) {
-            const isVid = target.mimetype.startsWith("video/");
-            await sock.sendMessage(m.from, {
-              [isVid ? "video" : "image"]: media,
-              caption: text,
-              mentions,
-            });
-            return;
-          }
-        } catch (e) {
-          console.error("[HIDETAG_MEDIA_ERR]", e);
+        const media = await target.download();
+        if (media) {
+          const isVid = /video/.test(mime);
+          return await sock.sendMessage(m.from, {
+            [isVid ? "video" : "image"]: media,
+            caption: text,
+            mentions,
+          });
         }
       }
 
-      await sock.sendMessage(m.from, { text: text, mentions });
+      await sock.sendMessage(m.from, { text, mentions });
     } catch (e) {
       console.error("[HIDETAG_ERR]", e);
       m.reply("_Gagal melakukan hidetag._");

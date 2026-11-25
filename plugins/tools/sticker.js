@@ -1,48 +1,40 @@
-/**
- * plugins/tools/sticker.js
- * Mengubah gambar atau video pendek menjadi berkas stiker WebP (Universal Chat Style)
- */
-
 import { downloadMediaMessage } from "baileys";
 import { res } from "../../src/response.js";
 
 export default {
   cmd: ["sticker", "s", "stiker"],
   category: "tools",
-  desc: "Mengonversi berkas media gambar atau video pendek menjadi bentuk stiker WhatsApp.",
-  exec: async (m, { sock, command }) => {
-    const q = m.quoted ? m.quoted : m;
-    const mime = (q.msg || q).mimetype || "";
+  desc: "Mengonversi media gambar atau video menjadi stiker WhatsApp",
 
-    if (!/image|video/.test(mime))
-      return m.reply(
-        `_Format salah! kirim atau reply objek gambar/video pendek dengan *${m.prefix}${command}*_`,
-      );
+  exec: async (m, { sock, command }) => {
+    const q = m.quoted || m;
+    const mime = (q.msg || q).mimetype || q.mimetype || "";
+    const type = q.type || m.type || "";
+    const isMedia = /image|video/.test(mime) || /image|video/.test(type);
+
+    if (!isMedia) {
+      return m.reply(res.noMedia("gambar atau video"));
+    }
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const buffer = await downloadMediaMessage(
-        {
-          key: m.quoted ? { id: m.quoted.id, remoteJid: m.from } : m.key,
-          message: q.message || q,
-        },
-        "buffer",
-        {},
-        {
-          logger: {
-            info: () => {},
-            error: () => {},
-            warn: () => {},
-            debug: () => {},
+      const buffer =
+        (await q.download?.()) ||
+        (await downloadMediaMessage(
+          {
+            key: m.quoted ? { id: m.quoted.id, remoteJid: m.from } : m.key,
+            message: q.message || (m.quoted ? q.msg : m.message),
           },
-        },
-      );
+          "buffer",
+          {},
+          { logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} } },
+        ).catch(() => null));
 
-      await sock.sendSticker(m.from, buffer, m, {
-        isAnimated: /video/.test(mime),
-      });
+      if (!buffer) throw new Error("Gagal mengunduh media");
 
+      const isVideo = /video/.test(mime) || /video/.test(type);
+      await sock.sendSticker(m.from, buffer, m, { isAnimated: isVideo });
       await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
     } catch (e) {
       console.error("[STICKER_GEN_ERR]", e);

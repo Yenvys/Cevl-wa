@@ -1,26 +1,17 @@
-/**
- * plugins/class/alert_pr.js
- * Fitur otomatisasi pengingat PR/Tugas terjadwal untuk grup spesifik menggunakan node-cron.
- * Waktu siaran otomatis: 08.00, 14.00, dan 20.00 WIB.
- */
-
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import cron from "node-cron";
 import { res } from "../../src/response.js";
 
 const prFile = path.join(process.cwd(), "data", "tugas", "pr_list.json");
-const groupAlertFile = path.join(
-  process.cwd(),
-  "data",
-  "tugas",
-  "group_alerts.json",
-);
+const groupAlertFile = path.join(process.cwd(), "data", "tugas", "group_alerts.json");
 
-if (!fs.existsSync(path.dirname(groupAlertFile)))
+if (!fs.existsSync(path.dirname(groupAlertFile))) {
   fs.mkdirSync(path.dirname(groupAlertFile), { recursive: true });
-if (!fs.existsSync(groupAlertFile))
-  fs.writeFileSync(groupAlertFile, JSON.stringify([]));
+}
+if (!fs.existsSync(groupAlertFile)) {
+  fs.writeFileSync(groupAlertFile, "[]");
+}
 
 let isLoopRunning = false;
 
@@ -28,97 +19,73 @@ export function listenAlertSchedule(sock) {
   if (isLoopRunning) return;
   isLoopRunning = true;
 
-  // Menjadwalkan tugas pada menit ke-0, pada jam 8, 14, dan 20 setiap hari
   cron.schedule(
     "0 8,14,20 * * *",
     async () => {
       try {
         if (!fs.existsSync(prFile)) return;
+        const daftarPR = JSON.parse(fs.readFileSync(prFile, "utf-8"));
+        const daftarGrup = JSON.parse(fs.readFileSync(groupAlertFile, "utf-8"));
+        if (!daftarPR.length || !daftarGrup.length) return;
 
-        const daftarPR = JSON.parse(fs.readFileSync(prFile));
-        const daftarGrupBinaan = JSON.parse(fs.readFileSync(groupAlertFile));
-
-        if (daftarPR.length === 0 || daftarGrupBinaan.length === 0) return;
-
-        let templateTeks = `🔔 *[PENGINGAT DAFTAR TUGAS KELAS]* 🔔\n\n`;
-        templateTeks += `Diinformasikan kepada seluruh anggota grup, berikut adalah daftar PR/Tugas yang belum diselesaikan:\n\n`;
-
+        let teks = "🔔 *[PENGINGAT DAFTAR TUGAS KELAS]* 🔔\n\nDiinformasikan kepada seluruh anggota grup, berikut adalah daftar PR/Tugas yang belum diselesaikan:\n\n";
         daftarPR.forEach((v, i) => {
-          const namaMatkul = v.matkul
-            ? v.matkul.toUpperCase()
-            : "TIDAK DIKETAHUI";
-          templateTeks += `*${i + 1}. [${namaMatkul}]*\n`;
-          templateTeks += `   • Batas Waktu : ${v.deadline || "Tidak Ditentukan"}\n`;
-          templateTeks += `   • Detail Tugas: ${v.detail || "Tidak Ada Detail"}\n\n`;
+          teks += `*${i + 1}. [${(v.matkul || "TIDAK DIKETAHUI").toUpperCase()}]*\n`;
+          teks += `   • Batas Waktu : ${v.deadline || "Tidak Ditentukan"}\n`;
+          teks += `   • Detail Tugas: ${v.detail || "Tidak Ada Detail"}\n\n`;
         });
-        templateTeks += `_Harap segera menyelesaikan tugas._`;
+        teks += "_Harap segera menyelesaikan tugas._";
 
-        for (const idGrup of daftarGrupBinaan) {
-          await sock.sendMessage(idGrup, { text: templateTeks });
+        for (const idGrup of daftarGrup) {
+          await sock.sendMessage(idGrup, { text: teks }).catch(() => {});
         }
-      } catch (error) {
-        console.error(
-          "Gagal mendistribusikan kiriman pengingat tugas otomatis:",
-          error,
-        );
+      } catch (err) {
+        console.error("Alert PR Error:", err.message);
       }
     },
-    {
-      scheduled: true,
-      timezone: "Asia/Jakarta",
-    },
+    { scheduled: true, timezone: "Asia/Jakarta" }
   );
 }
 
 export default {
   cmd: ["alertpr", "alert-pr", "infopr"],
   category: "class",
-  desc: "Mengaktifkan atau menonaktifkan pengingat otomatis daftar PR harian di dalam grup.",
-  exec: async (m, { args, sock, command }) => {
+  desc: "Mengaktifkan/menonaktifkan pengingat otomatis daftar PR di grup",
+  exec: async (m, { args, sock }) => {
     listenAlertSchedule(sock);
+    if (!m.isGroup) return m.reply(res.group);
 
-    if (!m.isGroup) {
+    const sub = args[0]?.toLowerCase();
+    const groups = JSON.parse(fs.readFileSync(groupAlertFile, "utf-8"));
+    const exists = groups.includes(m.from);
+
+    const isEnable = ["on", "--on", "enable", "1"].includes(sub);
+    const isDisable = ["off", "--off", "disable", "0"].includes(sub);
+
+    if (!isEnable && !isDisable) {
       return m.reply(
-        "Perintah ini hanya dapat dieksekusi di dalam lingkup grup WhatsApp.",
+        res.format(
+          m.prefix,
+          "alertpr <on/off>",
+          ["on", "off"],
+          `Status grup ini: ${exists ? "Aktif" : "Nonaktif"}`,
+          "Mengaktifkan/menonaktifkan siaran otomatis pengingat PR di grup"
+        )
       );
     }
 
-    const subCommand = args[0]?.toLowerCase();
-    if (!subCommand || !["--on", "--off"].includes(subCommand)) {
-      return m.reply(
-        res.format(m.prefix, "alertpr", `--on\n> ${m.prefix}alertpr --off`),
-      );
+    if (isEnable) {
+      if (exists) return m.reply(res.warn("Sistem pengingat harian otomatis sudah aktif di grup ini."));
+      groups.push(m.from);
+      fs.writeFileSync(groupAlertFile, JSON.stringify(groups, null, 2));
+      return m.reply(res.success("Fitur Pengingat Aktif! Grup ini akan menerima siaran daftar tugas setiap jam 08.00, 14.00, dan 20.00 WIB."));
     }
 
-    const databaseGrup = JSON.parse(fs.readFileSync(groupAlertFile));
-
-    if (subCommand === "--on") {
-      if (databaseGrup.includes(m.from)) {
-        return m.reply(
-          "Sistem pengingat harian otomatis sudah berada dalam status aktif di grup ini.",
-        );
-      }
-
-      databaseGrup.push(m.from);
-      fs.writeFileSync(groupAlertFile, JSON.stringify(databaseGrup, null, 2));
-      return m.reply(
-        "🎯 *Fitur Pengingat Aktif!* Grup ini akan menerima siaran daftar tugas otomatis setiap hari pada jam 08.00, 14.00, dan 20.00 WIB.",
-      );
-    }
-
-    if (subCommand === "--off") {
-      const indeksGrup = databaseGrup.indexOf(m.from);
-      if (indeksGrup === -1) {
-        return m.reply(
-          "Sistem pengingat memang tidak dikonfigurasikan aktif di grup ini.",
-        );
-      }
-
-      databaseGrup.splice(indeksGrup, 1);
-      fs.writeFileSync(groupAlertFile, JSON.stringify(databaseGrup, null, 2));
-      return m.reply(
-        "🛑 *Fitur Pengingat Dimatikan!* Grup ini telah dihapus dari daftar siaran terjadwal otomatis.",
-      );
+    if (isDisable) {
+      if (!exists) return m.reply(res.warn("Sistem pengingat tidak aktif di grup ini."));
+      const updated = groups.filter((g) => g !== m.from);
+      fs.writeFileSync(groupAlertFile, JSON.stringify(updated, null, 2));
+      return m.reply(res.success("Fitur Pengingat Dimatikan! Grup ini telah dihapus dari daftar pengingat otomatis."));
     }
   },
 };

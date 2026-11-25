@@ -5,18 +5,13 @@ import { res } from "../../src/response.js";
 export default {
   cmd: ["daftar", "register", "reg"],
   category: "rpg",
-  exec: async (m, { sock, command }) => {
+  desc: "Mendaftar akun RPG baru",
+  exec: async (m) => {
     try {
       const isRegistered = await UserRPG.findOne({ noWa: m.sender });
+      if (isRegistered) return m.reply(`_Kamu sudah daftar. Cek di *${m.prefix ?? "."}me*_`);
 
-      if (isRegistered) {
-        return m.reply("_Kamu Sudah Daftar. Cek di *.me*_");
-      }
-
-      const newUser = new UserRPG({
-        noWa: m.sender,
-      });
-
+      const newUser = new UserRPG({ noWa: m.sender });
       await newUser.save();
 
       const teks =
@@ -25,12 +20,11 @@ export default {
         `> 📱 *Nomor:* @${m.sender.split("@")[0]}\n` +
         `> 💼 *Pekerjaan:* Pengangguran Sukses\n` +
         `> 💵 *Modal Awal:* ${formatYen(10000)}\n\n` +
-        `_📌 Catatan: Ketik *.bursakerja* untuk mencari pekerjaan!_`;
+        `_📌 Catatan: Ketik *${m.prefix ?? "."}bursakerja* untuk mencari pekerjaan!_`;
 
-      // FIX: Hapus adReply, ganti pake reply murni dengan bawaan mention nomor
       return m.reply(teks, { mentions: [m.sender] });
     } catch (error) {
-      console.log(error);
+      console.error(error);
       return m.reply(res.error);
     }
   },

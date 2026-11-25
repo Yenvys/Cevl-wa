@@ -1,19 +1,17 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import zlib from "zlib";
-import { config } from "../../config.js";
+import zlib from "node:zlib";
 import { res } from "../../src/response.js";
+import { OmDownloader } from "../../src/omdown.js";
 
-async function fbDownloader(url) {
+const omDownloader = new OmDownloader();
+const NEWSLETTER_JID = "120363401731165846@newsletter";
+
+async function fallbackFbDownloader(url) {
   try {
-    const res = await axios.post(
+    const response = await axios.post(
       "https://savefbs.com/api/v1/aio/html",
-      {
-        vid: url,
-        prefix: "savefbs.com",
-        ex: "",
-        format: "",
-      },
+      { vid: url, prefix: "savefbs.com", ex: "", format: "" },
       {
         responseType: "arraybuffer",
         headers: {
@@ -23,38 +21,28 @@ async function fbDownloader(url) {
           origin: "https://savefbs.com",
           referer: "https://savefbs.com/",
         },
-      },
+        timeout: 30000,
+      }
     );
 
     let html;
     try {
-      html = zlib.gunzipSync(res.data).toString();
+      html = zlib.gunzipSync(response.data).toString();
     } catch {
-      html = res.data.toString();
+      html = response.data.toString();
     }
 
     const $ = cheerio.load(html);
-
-    const result = {
-      title: $("h3").first().text().trim() || "Facebook Video",
-      thumbnail: $("img.aio-thumbnail").attr("src"),
-      links: [],
-    };
-
-    $("a.download-btn").each((i, el) => {
-      const text = $(el).text().trim();
+    const links = [];
+    $("a.download-btn").each((_, el) => {
       const link = $(el).attr("href");
-
-      if (link && link.startsWith("http")) {
-        result.links.push({
-          quality: text,
-          url: link,
-        });
+      if (link?.startsWith("http")) {
+        links.push({ quality: $(el).text().trim(), url: link });
       }
     });
 
-    return result;
-  } catch (e) {
+    return links.length ? { links } : null;
+  } catch {
     return null;
   }
 }
@@ -62,34 +50,59 @@ async function fbDownloader(url) {
 export default {
   cmd: ["fb", "facebook", "fesnuk"],
   category: "download",
+  desc: "Download video Facebook (Reels, Watch, Post)",
   exec: async (m, { sock, query, command }) => {
-    if (!query)
-      return m.reply(res.format(m.prefix, command, `https://facebook.com/..`));
-    if (!/facebook\.com|fb\.watch/i.test(query))
-      return m.adReply("Link tidak valid!");
+    const urlMatch = (query || "").match(/(https?:\/\/[^\s]+)/i);
+    if (!urlMatch) {
+      return m.reply(
+        res.format(
+          m.prefix,
+          `${command} <url>`,
+          "https://www.facebook.com/watch?v=...",
+          "Mendukung reels, video feed, dan video watch Facebook",
+          "Download video Facebook"
+        )
+      );
+    }
+
+    const url = urlMatch[0];
+    if (!/facebook\.com|fb\.watch/i.test(url)) return m.reply(res.invalidUrl("Facebook"));
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
-    const data = await fbDownloader(query);
+    const contextInfo = {
+      forwardedNewsletterMessageInfo: { newsletterJid: NEWSLETTER_JID, serverMessageId: 142, newsletterName: "Cevl" },
+    };
 
-    if (!data || data.links.length === 0) {
-      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-      return m.reply(res.error);
+    // 1. Coba via OmDownloader
+    try {
+      const data = await omDownloader.resolve(url);
+      if (data?.success) {
+        const capt = `*FACEBOOK DOWNLOADER*\n> *Title:* ${data.title?.slice(0, 200) || "Video Facebook"}\n${data.author ? `> *Author:* ${data.author}\n` : ""}`;
+        const videoFmt = (data.formats || []).find((f) => f.dl && (f.kind === "video" || f.id.includes("sd") || f.id.includes("hd")));
+
+        if (videoFmt) {
+          const buf = await omDownloader.downloadBuffer(videoFmt.dl, { cookies: data.sessionCookies });
+          await sock.sendMessage(m.from, { video: buf, caption: capt.trim(), mimetype: "video/mp4", contextInfo }, { quoted: m });
+          await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+          return;
+        }
+      }
+    } catch (omErr) {
+      console.warn("[FB_OMDOWN_FALLBACK]", omErr.message);
     }
 
-    const videoUrl = data.links[0].url;
-    const quality = data.links[0].quality;
+    // 2. Fallback via SaveFBS
+    try {
+      const data = await fallbackFbDownloader(url);
+      if (!data?.links?.length) throw new Error("Media tidak ditemukan.");
 
-    await sock.sendMessage(
-      m.from,
-      {
-        video: { url: videoUrl },
-        caption: ``,
-        mimetype: "video/mp4",
-      },
-      { quoted: m },
-    );
-
-    await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
+      await sock.sendMessage(m.from, { video: { url: data.links[0].url }, mimetype: "video/mp4", contextInfo }, { quoted: m });
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+    } catch (err) {
+      console.error("[FB_DL_ERR]", err);
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
+      await m.reply(res.error(`Gagal download video Facebook: ${err.message}`));
+    }
   },
 };

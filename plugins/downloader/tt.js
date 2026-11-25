@@ -1,59 +1,32 @@
-/**
- * plugins/download/tiktok.js
- * Downloader TikTok via SiputZX API v2
- */
-
 import axios from "axios";
 import { res } from "../../src/response.js";
+import { OmDownloader } from "../../src/omdown.js";
 
-async function tiktokDL(url) {
+const omDownloader = new OmDownloader();
+const NEWSLETTER_JID = "120363401731165846@newsletter";
+
+async function fallbackTiktokDL(url) {
   try {
-    const { data } = await axios.get(
-      `https://api.siputzx.my.id/api/d/tiktok/v2?url=${encodeURIComponent(url)}`,
-      { timeout: 60000 },
-    );
-
+    const { data } = await axios.get(`https://api.siputzx.my.id/api/d/tiktok/v2?url=${encodeURIComponent(url)}`, { timeout: 30000 });
     if (!data?.status || !data?.data) return null;
-
     const d = data.data;
-    const result = {
+
+    const links = [];
+    if (d.slides?.length) {
+      d.slides.forEach((img) => links.push({ text: "photo", link: img }));
+    } else {
+      if (d.no_watermark_link_hd) links.push({ text: "hd", link: d.no_watermark_link_hd });
+      if (d.no_watermark_link) links.push({ text: "sd", link: d.no_watermark_link });
+      if (d.watermark_link) links.push({ text: "wm", link: d.watermark_link });
+    }
+
+    return {
       title: d.text || "TikTok Content",
       author: d.author_nickname || "Unknown",
-      cover: d.cover_link || null,
-      duration: d.duration || null,
-      stats: {
-        plays: d.play_count || 0,
-        likes: d.like_count || 0,
-        comments: d.comment_count || 0,
-        shares: d.share_count || 0,
-      },
-      links: [],
+      links,
+      music: d.music_link,
     };
-
-    // Cek slideshow (images)
-    if (d.slides && Array.isArray(d.slides) && d.slides.length > 0) {
-      result.links = d.slides.map((img) => ({ text: "photo", link: img }));
-    } else {
-      // Video links
-      if (d.no_watermark_link_hd) {
-        result.links.push({ text: "hd", link: d.no_watermark_link_hd });
-      }
-      if (d.no_watermark_link) {
-        result.links.push({ text: "sd", link: d.no_watermark_link });
-      }
-      if (d.watermark_link) {
-        result.links.push({ text: "wm", link: d.watermark_link });
-      }
-    }
-
-    // Music link
-    if (d.music_link) {
-      result.music = d.music_link;
-    }
-
-    return result;
-  } catch (e) {
-    console.error("[TT_API_ERR]", e.message);
+  } catch {
     return null;
   }
 }
@@ -63,80 +36,82 @@ export default {
   category: "download",
   desc: "Download TikTok Video / Photo Slideshow",
   exec: async (m, { sock, query, command }) => {
-    if (!query) {
+    const urlMatch = (query || "").match(/(https?:\/\/[^\s]+)/i);
+    if (!urlMatch) {
       return m.reply(
-        res.format(m.prefix, command, `https://vt.tiktok.com/...`),
+        res.format(
+          m.prefix,
+          `${command} <url>`,
+          "https://vt.tiktok.com/...",
+          "Mendukung video tanpa watermark dan slideshow foto",
+          "Download video/foto TikTok"
+        )
       );
     }
-    if (!query.match(/tiktok\.com/gi)) {
-      return m.reply("❌ Link tidak valid!");
-    }
+
+    const url = urlMatch[0];
+    if (!/tiktok\.com|douyin\.com/i.test(url)) return m.reply(res.invalidUrl("TikTok"));
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
+    const contextInfo = {
+      forwardedNewsletterMessageInfo: { newsletterJid: NEWSLETTER_JID, serverMessageId: 142, newsletterName: "Cevl" },
+    };
+
+    // 1. Coba via OmDownloader
     try {
-      const data = await tiktokDL(query);
+      const data = await omDownloader.resolve(url);
+      if (data?.success) {
+        const capt = `*TIKTOK DOWNLOADER*\n> *Author:* ${data.author || "Unknown"}\n> ${data.title ? data.title.slice(0, 300) : ""}`;
 
-      if (!data || data.links.length === 0) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-        return m.reply(res.error);
+        const videoFmt = (data.formats || []).find((f) => f.dl && (f.kind === "video" || f.id.includes("sd") || f.id.includes("hd")));
+
+        if (videoFmt) {
+          const buf = await omDownloader.downloadBuffer(videoFmt.dl, { cookies: data.sessionCookies });
+          await sock.sendMessage(m.from, { video: buf, caption: capt.trim(), mimetype: "video/mp4", contextInfo }, { quoted: m });
+          await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+          return;
+        }
+
+        if (data.slides?.length) {
+          await m.reply(`*TIKTOK SLIDESHOW*\n_Mengirim ${data.slides.length} foto slideshow..._`);
+          for (let i = 0; i < data.slides.length; i++) {
+            const slide = data.slides[i];
+            const imgUrl = slide.downloadUrl || slide.imageUrl;
+            const imgBuffer = await omDownloader.downloadBuffer(imgUrl, { cookies: data.sessionCookies });
+            await sock.sendMessage(m.from, { image: imgBuffer, caption: i === 0 ? capt.trim() : undefined, contextInfo }, { quoted: i === 0 ? m : undefined });
+          }
+          await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+          return;
+        }
       }
+    } catch (omErr) {
+      console.warn("[TT_OMDOWN_FALLBACK]", omErr.message);
+    }
 
-      const contextInfo = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: "120363401731165846@newsletter",
-          serverMessageId: 142,
-          newsletterName: "Cevl",
-        },
-      };
+    // 2. Fallback jika OmDownloader bermasalah
+    try {
+      const data = await fallbackTiktokDL(url);
+      if (!data?.links?.length) throw new Error("Media tidak ditemukan.");
 
-      let capt = `*TIKTOK DOWNLOADER*\n`;
-      capt += `> ${data.title?.substring(0, 200) || ""}`;
+      const capt = `*TIKTOK DOWNLOADER*\n> ${data.title?.substring(0, 200) || ""}`;
+      const photoLinks = data.links.filter((l) => l.text === "photo");
 
-      const photoLinks = data.links.filter((l) =>
-        l.text.toLowerCase().includes("photo"),
-      );
-
-      if (photoLinks.length > 0) {
-        await m.reply(
-          `${capt}\n\n_Mengirim berkas slideshow (${photoLinks.length} foto)..._`,
-        );
-
-        for (let photo of photoLinks) {
-          await sock.sendMessage(
-            m.from,
-            {
-              image: { url: photo.link },
-              caption: "",
-              contextInfo,
-            },
-            { quoted: m },
-          );
+      if (photoLinks.length) {
+        await m.reply(`${capt}\n\n_Mengirim berkas slideshow (${photoLinks.length} foto)..._`);
+        for (const photo of photoLinks) {
+          await sock.sendMessage(m.from, { image: { url: photo.link }, contextInfo }, { quoted: m });
         }
       } else {
-        const videoUrl =
-          data.links.find((l) => l.text.toLowerCase().includes("hd"))?.link ||
-          data.links[0].link;
-
-        await sock.sendMessage(
-          m.from,
-          {
-            video: { url: videoUrl },
-            caption: capt,
-            mimetype: "video/mp4",
-            contextInfo,
-          },
-          { quoted: m },
-        );
+        const videoUrl = data.links.find((l) => l.text === "hd")?.link || data.links[0].link;
+        await sock.sendMessage(m.from, { video: { url: videoUrl }, caption: capt, mimetype: "video/mp4", contextInfo }, { quoted: m });
       }
 
-      await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
     } catch (err) {
       console.error("[TIKTOK_DL_ERR]", err);
       await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-      await m.reply(res.error);
+      await m.reply(res.error(`Gagal download media TikTok: ${err.message}`));
     }
   },
 };

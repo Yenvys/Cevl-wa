@@ -1,9 +1,9 @@
 export const config = {
-  ownerNumbers: ["62..."],
+  ownerNumbers: ["62895806279898"],
   ownerName: "Yenvys",
   botName: "Cevl",
   prefix: [".", "/"],
-  mode: "self", // Otomatis public pas bot baru online (Opsi: public/self/group/private)
+  mode: "self",
   geminiModel: "gemini-3-flash-preview",
 };
 

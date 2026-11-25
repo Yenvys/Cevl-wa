@@ -1,120 +1,74 @@
-/**
- * Adapted from Ginko project (https://github.com/ginkohub/mushi)
- */
-
 import fs from "node:fs";
 import path from "node:path";
 
+const defenseFile = path.join(process.cwd(), "data", "defense.json");
+
 export function getDefenseConfig() {
-  const defenseFile = path.join(process.cwd(), "data", "defense.json");
-  if (!fs.existsSync(defenseFile)) {
-    return {
-      active: true,
-      allow_status: [
-        "extendedTextMessage",
-        "videoMessage",
-        "imageMessage",
-        "audioMessage",
-        "protocolMessage",
-        "senderKeyDistributionMessage",
-        "associatedChildMessage",
-        "reactionMessage",
-      ],
-    };
-  }
-  return JSON.parse(fs.readFileSync(defenseFile, "utf-8"));
+  try {
+    if (fs.existsSync(defenseFile)) {
+      return JSON.parse(fs.readFileSync(defenseFile, "utf-8"));
+    }
+  } catch {}
+  return {
+    active: true,
+    allow_status: [
+      "extendedTextMessage",
+      "videoMessage",
+      "imageMessage",
+      "audioMessage",
+      "protocolMessage",
+      "senderKeyDistributionMessage",
+      "associatedChildMessage",
+      "reactionMessage",
+    ],
+  };
 }
 
 export async function runDefender(m, { sock, handler }) {
   if (m.fromMe) return;
 
-  const config = getDefenseConfig();
-  if (!config.active) return; // Defense is inactive
+  const cfg = getDefenseConfig();
+  if (!cfg.active) return;
 
-  let suspect = false;
   let reason = "";
 
-  // Detector 1: Pesan Status (Broadcast) dengan tipe yang tidak diizinkan
-  const isStatus =
-    m.from === "status@broadcast" || m.key?.remoteJid === "status@broadcast";
-  if (isStatus) {
-    if (!config.allow_status.includes(m.type)) {
-      suspect = true;
-      reason = "Pesan status dengan tipe yang tidak diizinkan";
-    }
-  }
-
-  // Detector 2: Terlalu banyak mention (Anti Tag All spam / crash)
-  if (!suspect && m.mentionedJid?.length > 1024) {
-    suspect = true;
+  const isStatus = m.from === "status@broadcast" || m.key?.remoteJid === "status@broadcast";
+  if (isStatus && !cfg.allow_status?.includes(m.type)) {
+    reason = "Pesan status dengan tipe yang tidak diizinkan";
+  } else if (m.mentionedJid?.length > 1024) {
     reason = "Terlalu banyak penyebutan JID";
-  }
-
-  // Detector 3: Overload message (Anti Crash text/payload)
-  if (!suspect) {
-    const msgs = [m.message?.botInvokeMessage?.message, m.message];
-    for (const msg of msgs) {
-      if (!msg) continue;
+  } else {
+    const rawMsgs = [m.message?.botInvokeMessage?.message, m.message].filter(Boolean);
+    for (const msg of rawMsgs) {
       if (msg.newsletterAdminInviteMessage?.caption?.length > 256) {
-        suspect = true;
+        reason = "Teks berlebihan (overload caption)";
         break;
       }
-      if (
-        msg.interactiveMessage?.nativeFlowMessage?.messageParamsJson?.length >
-        2048
-      ) {
-        suspect = true;
+      if (msg.interactiveMessage?.nativeFlowMessage?.messageParamsJson?.length > 2048) {
+        reason = "Teks berlebihan (overload native flow)";
         break;
       }
     }
-    if (suspect) reason = "Teks berlebihan (overload)";
   }
 
-  // Jika terdeteksi sebagai pesan berbahaya, lakukan defense actions
-  if (suspect) {
-    handler.log.warn(
-      "DEFENDER",
-      `Pertahanan: ${reason} dari ${m.sender} di ${m.from}`,
-    );
+  if (!reason) return;
 
-    try {
-      // Aksi 1: Blokir User
-      await sock.updateBlockStatus(m.sender, "block").catch(() => {});
+  handler.log.warn("DEFENDER", `Pertahanan: ${reason} dari ${m.sender} di ${m.from}`);
 
-      // Aksi 2: Hapus pesan untuk semua (Delete for All)
-      let canDeleteForAll = false;
-      if (m.isGroup) {
-        // Cek apakah bot adalah admin
-        if (m.isBotAdmin) canDeleteForAll = true;
-      } else {
-        canDeleteForAll = true; // Private chat bisa dihapus
-      }
-
-      if (canDeleteForAll) {
-        await sock.sendMessage(m.from, { delete: m.key }).catch(() => {});
-      }
-
-      // Aksi 3: Hapus pesan untuk saya (Delete for Me)
-      await sock
-        .chatModify(
-          {
-            deleteForMe: {
-              deleteMedia: true,
-              key: m.key,
-              timestamp: Date.now(),
-            },
-          },
-          m.from,
-        )
-        .catch(() => {});
-
-      if (m.isGroup && m.isBotAdmin) {
-        await sock
-          .groupParticipantsUpdate(m.from, [m.sender], "remove")
-          .catch(() => {});
-      }
-    } catch (err) {
-      handler.log.error("DEFENDER_ERR", err.message);
+  try {
+    await sock.updateBlockStatus(m.sender, "block").catch(() => {});
+    if (!m.isGroup || m.isBotAdmin) {
+      await sock.sendMessage(m.from, { delete: m.key }).catch(() => {});
     }
+    await sock.chatModify(
+      { deleteForMe: { deleteMedia: true, key: m.key, timestamp: Date.now() } },
+      m.from
+    ).catch(() => {});
+
+    if (m.isGroup && m.isBotAdmin) {
+      await sock.groupParticipantsUpdate(m.from, [m.sender], "remove").catch(() => {});
+    }
+  } catch (err) {
+    handler.log.error("DEFENDER_ERR", err.message);
   }
 }

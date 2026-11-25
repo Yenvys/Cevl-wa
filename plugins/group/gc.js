@@ -1,156 +1,89 @@
-/**
- * plugins/grup/mainGroup.js
- * Pusat Komando Manajemen Fitur Administrasi Grup (Universal Chat Style)
- */
-
 import { getGroupSettings, updateGroupSettings } from "../../src/database.js";
 import { res } from "../../src/response.js";
 
 export default {
-  cmd: [
-    "gc",
-    "open",
-    "close",
-    "promote",
-    "up",
-    "demote",
-    "down",
-    "antilink",
-    "welcome",
-    "goodbye",
-  ],
+  cmd: ["gc", "open", "close", "promote", "up", "demote", "down", "antilink", "welcome", "goodbye"],
   category: "grup",
-  desc: "Pusat kendali konfigurasi, status operasional, serta hak akses anggota grup.",
+  desc: "Pusat kendali pengaturan dan administrasi grup",
   exec: async (m, { sock, args, query, command }) => {
     if (!m.isGroup) return m.reply(res.group);
-    if (!m.isOwner && !m.isAdmin) return m.reply("_kamu bukan admin/owner!_");
-    if (!m.isBotAdmin) return m.reply("_Bot bukan admin/owner!_");
+    if (!m.isOwner && !m.isAdmin) return m.reply(res.admin);
+    if (!m.isBotAdmin) return m.reply(res.botAdmin);
 
-    const targetCmd = command.toLowerCase();
+    const cmd = command.toLowerCase();
 
-    switch (targetCmd) {
-      // ==========================================
-      // KONDISI: BUKA / TUTUP GRUP
-      // ==========================================
-      case "gc":
-      case "open":
-      case "close": {
-        const subAction = args[0]?.toLowerCase() || targetCmd;
-        let settingMode = /open|buka/i.test(subAction)
-          ? "not_announcement"
-          : /close|tutup/i.test(subAction)
-            ? "announcement"
-            : "";
+    // 1. Open / Close Group
+    if (["gc", "open", "close"].includes(cmd)) {
+      const sub = args[0]?.toLowerCase() || cmd;
+      const mode = /open|buka/i.test(sub) ? "not_announcement" : /close|tutup/i.test(sub) ? "announcement" : "";
+      if (!mode) return m.reply(res.format(m.prefix, "gc", ["open", "close"]));
 
-        if (!settingMode) {
-          return m.reply(
-            `Format salah!\n\nGunakan format:\n${m.prefix}gc open\n${m.prefix}gc close`,
-          );
-        }
+      await sock.groupSettingUpdate(m.from, mode);
+      return m.react("");
+    }
 
-        await sock.groupSettingUpdate(m.from, settingMode);
-        await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-        break;
+    // 2. Promote / Demote
+    if (["promote", "up", "demote", "down"].includes(cmd)) {
+      const action = /promote|up/i.test(cmd) ? "promote" : "demote";
+      let targets = m.quoted ? [m.quoted.sender] : m.mentionedJid || [];
+      if (query && !targets.length) targets.push(`${query.replace(/[^0-9]/g, "")}@s.whatsapp.net`);
+      if (!targets.length) return m.reply(res.format(m.prefix, command, "@tag/reply pesan"));
+
+      try {
+        for (const t of targets) await sock.groupParticipantsUpdate(m.from, [t], action);
+        return m.react("");
+      } catch (e) {
+        console.error(`[${action.toUpperCase()}_ERR]`, e);
+        await m.react("❌");
+        return m.reply(res.error);
+      }
+    }
+
+    // 3. Welcome / Goodbye
+    if (["welcome", "goodbye"].includes(cmd)) {
+      const sub = args[0]?.toLowerCase();
+      const current = getGroupSettings(m.from);
+
+      if (sub === "on" || sub === "off") {
+        updateGroupSettings(m.from, cmd, sub === "on" ? 1 : 0);
+        await m.react("");
+        return m.reply(`_Sistem notif *${cmd.toUpperCase()}* diubah menjadi: *${sub.toUpperCase()}*_`);
       }
 
-      // ==========================================
-      // KONDISI: PROMOTE / DEMOTE
-      // ==========================================
-      case "promote":
-      case "up":
-      case "demote":
-      case "down": {
-        const actionType = /promote|up/i.test(targetCmd) ? "promote" : "demote";
-        let targets = m.quoted ? [m.quoted.sender] : m.mentionedJid || [];
-
-        if (query && !targets.length) {
-          targets.push(query.replace(/[^0-9]/g, "") + "@s.whatsapp.net");
+      if (sub === "set") {
+        const textTemplate = args.slice(1).join(" ");
+        if (!textTemplate) {
+          return m.reply(res.format(m.prefix, `${cmd} set`, "Selamat Datang @pushname di grup @gcname", "Variabel: @pushname, @gcname"));
         }
-        if (!targets.length) {
-          return m.reply(res.format(m.prefix, command, `@tag/reply pesan`));
-        }
-
-        try {
-          for (let target of targets) {
-            await sock.groupParticipantsUpdate(m.from, [target], actionType);
-          }
-          await sock.sendMessage(m.from, { react: { text: "", key: m.key } }); // Menghapus reaksi
-        } catch (e) {
-          console.error(`[${actionType.toUpperCase()}_ERR]`, e);
-          await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-          await m.reply(res.error);
-        }
-        break;
+        updateGroupSettings(m.from, `${cmd}Text`, textTemplate);
+        await m.react("");
+        return m.reply(`_Template pesan *${cmd}* berhasil diperbarui._`);
       }
 
-      // ==========================================
-      // KONDISI: KONFIGURASI WELCOME / GOODBYE
-      // ==========================================
-      case "welcome":
-      case "goodbye": {
-        const subAction = args[0]?.toLowerCase();
-        const currentSettings = await getGroupSettings(m.from);
+      return m.reply(
+        res.format(
+          m.prefix,
+          `${cmd} <opsi>`,
+          [
+            "on",
+            "off",
+            "set Selamat Datang @pushname di grup @gcname",
+          ],
+          `Status: ${current[cmd] ? "ON" : "OFF"}. Variabel: @pushname, @gcname`,
+          `Pengaturan notifikasi pesan ${cmd.toUpperCase()} grup`,
+        ),
+      );
+    }
 
-        if (subAction === "on" || subAction === "off") {
-          const toggleValue = subAction === "on" ? 1 : 0;
-          await updateGroupSettings(m.from, targetCmd, toggleValue);
-          await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-          return m.reply(
-            `_Sistem notif *${targetCmd.toUpperCase()}* berhasil diubah menjadi: *${subAction.toUpperCase()}*_`,
-          );
-        }
-
-        if (subAction === "set") {
-          const newTextTemplate = args.slice(1).join(" ");
-          if (!newTextTemplate) {
-            return m.reply(
-              `Format salah!\n\nContoh penggunaan:\n${m.prefix}${targetCmd} set Selamat Datang @pushname di grup @gcname`,
-            );
-          }
-          await updateGroupSettings(
-            m.from,
-            targetCmd + "Text",
-            newTextTemplate,
-          );
-          await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-          return m.reply(`teks teks pesan *${targetCmd}* berhasil diperbarui.`);
-        }
-
-        let infoMenu = `⌗ *SISTEM NOTIFIKASI ${targetCmd.toUpperCase()}*\n\n`;
-        infoMenu += `> *Status Aktif:* [ ${currentSettings[targetCmd] ? "ON" : "OFF"} ]\n\n`;
-        infoMenu += `*Opsi Perintah Modifikasi:*\n`;
-        infoMenu += `│ ◦ ${m.prefix}${targetCmd} on\n`;
-        infoMenu += `│ ◦ ${m.prefix}${targetCmd} off\n`;
-        infoMenu += `│ ◦ ${m.prefix}${targetCmd} set <template_teks>\n`;
-        infoMenu += `╰───────────────────────────\n\n`;
-        infoMenu += `_Catatan: Gunakan tag @pushname untuk memanggil nama user dan @gcname untuk memanggil nama grup._`;
-
-        await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-        await m.reply(infoMenu);
-        break;
+    // 4. Antilink
+    if (cmd === "antilink") {
+      const sub = args[0]?.toLowerCase();
+      if (!["on", "off"].includes(sub)) {
+        return m.reply(res.format(m.prefix, "antilink", ["on", "off"]));
       }
-
-      // ==========================================
-      // KONDISI: KONFIGURASI FILTER ANTILINK
-      // ==========================================
-      case "antilink": {
-        const subAction = args[0]?.toLowerCase();
-        if (!["on", "off"].includes(subAction)) {
-          return m.reply(
-            `Format salah!\n\nGunakan format:\n${m.prefix}antilink on\n${m.prefix}antilink off`,
-          );
-        }
-
-        const antilinkToggle = subAction === "on" ? 1 : 0;
-        await getGroupSettings(m.from);
-        await updateGroupSettings(m.from, "antilink", antilinkToggle);
-
-        await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
-        await m.reply(
-          `_*Antilink* berhasil diubah ke: *${subAction.toUpperCase()}*_`,
-        );
-        break;
-      }
+      updateGroupSettings(m.from, "antilink", sub === "on" ? 1 : 0);
+      await m.react("");
+      return m.reply(`_*Antilink* berhasil diubah ke: *${sub.toUpperCase()}*_`);
     }
   },
 };

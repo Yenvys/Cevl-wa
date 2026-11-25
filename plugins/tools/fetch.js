@@ -1,8 +1,3 @@
-/**
- * plugins/tools/fetch.js
- * Mengambil data atau mengunduh media secara langsung dari URL (Universal Chat Style)
- */
-
 import fetch from "node-fetch";
 import path from "node:path";
 import fs from "node:fs";
@@ -12,64 +7,37 @@ import { res } from "../../src/response.js";
 export default {
   cmd: ["fetch", "get"],
   category: "tools",
-  desc: "Ambil data atau unduh media dari URL secara otomatis berdasarkan tipe konten.",
+  desc: "Ambil data atau unduh media dari URL secara otomatis",
+
   exec: async (m, { sock, query, command }) => {
     if (!query) return m.reply(res.format(m.prefix, command, `<url_target>`));
-    if (!/^https?:\/\//.test(query))
-      return m.reply(res.format(m.prefix, command, `https://...`));
+    if (!/^https?:\/\//i.test(query)) return m.reply(res.format(m.prefix, command, `https://...`));
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const res = await fetch(query);
-      const contentType = res.headers.get("content-type");
+      const response = await fetch(query);
+      const contentType = response.headers.get("content-type") || "";
 
       if (/image/.test(contentType)) {
-        await sock.sendMessage(
-          m.from,
-          {
-            image: { url: query },
-            caption: `*Sumber:* ${query}`,
-          },
-          { quoted: m },
-        );
-        return await sock.sendMessage(m.from, {
-          react: { text: "", key: m.key },
-        });
+        await sock.sendMessage(m.from, { image: { url: query }, caption: `*Sumber:* ${query}` }, { quoted: m });
+        return await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
       }
 
       if (/video/.test(contentType)) {
-        const arrayBuffer = await res.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const buffer = Buffer.from(await response.arrayBuffer());
         const mp4Buffer = await convertToMp4(buffer);
-
         await sock.sendMessage(
           m.from,
-          {
-            video: mp4Buffer,
-            caption: `*Sumber:* ${query}`,
-            mimetype: "video/mp4",
-            fileName: "video.mp4",
-          },
+          { video: mp4Buffer, caption: `*Sumber:* ${query}`, mimetype: "video/mp4", fileName: "video.mp4" },
           { quoted: m },
         );
-        return await sock.sendMessage(m.from, {
-          react: { text: "", key: m.key },
-        });
+        return await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
       }
 
       if (/audio/.test(contentType)) {
-        await sock.sendMessage(
-          m.from,
-          {
-            audio: { url: query },
-            mimetype: "audio/mp4",
-          },
-          { quoted: m },
-        );
-        return await sock.sendMessage(m.from, {
-          react: { text: "", key: m.key },
-        });
+        await sock.sendMessage(m.from, { audio: { url: query }, mimetype: "audio/mp4" }, { quoted: m });
+        return await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
       }
 
       if (/pdf|zip|msword/.test(contentType)) {
@@ -82,24 +50,18 @@ export default {
           },
           { quoted: m },
         );
-        return await sock.sendMessage(m.from, {
-          react: { text: "", key: m.key },
-        });
+        return await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
       }
 
-      let txt = await res.buffer();
+      let txt = await response.text();
       try {
-        txt = JSON.stringify(JSON.parse(txt.toString()), null, 2);
-      } catch {
-        txt = txt.toString();
-      }
+        txt = JSON.stringify(JSON.parse(txt), null, 2);
+      } catch {}
 
       if (txt.length > 4000) {
         const fileName = `result_${Date.now()}.html`;
         const filePath = path.join(process.cwd(), "data", "tmp", fileName);
-
-        if (!fs.existsSync(dirname(filePath)))
-          fs.mkdirSync(dirname(filePath), { recursive: true });
+        if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, txt);
 
         await sock.sendMessage(
@@ -107,9 +69,8 @@ export default {
           {
             document: { url: filePath },
             mimetype: "text/html",
-            fileName: fileName,
-            caption:
-              "_Hasil luaran data terlalu panjang, silakan baca melalui file._",
+            fileName,
+            caption: "_Hasil luaran data terlalu panjang, silakan baca melalui file._",
           },
           { quoted: m },
         );

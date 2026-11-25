@@ -1,30 +1,22 @@
-/**
- * src/helper.js
- * Core System Media & Socket Wrapper for Yenvy Bot Engine
- */
-// FORMAT SUCI ES6 IMPORT SESUAI DOKUMENTASI RESMI BAILEYS 2026
 import {
   generateMessageID,
-  generateWAMessage,
   generateWAMessageFromContent,
   prepareWAMessageMedia,
-  proto,
   downloadMediaMessage,
 } from "baileys";
-
-import crypto from "crypto";
+import crypto from "node:crypto";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 import WebP from "node-webpmux";
 import fs from "node:fs";
 import path from "node:path";
-import { PassThrough, Readable } from "stream";
-import { tmpdir } from "os";
+import { PassThrough, Readable } from "node:stream";
+import { tmpdir } from "node:os";
 import fetch from "node-fetch";
-import { exec, execFile } from "child_process";
-import pino from "pino";
+import { execFile } from "node:child_process";
 import config from "../config.js";
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const customTemp = path.join(process.cwd(), "data", "tmp");
 if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
@@ -35,6 +27,7 @@ export const store = {
   messages: new Map(),
   isDirty: false,
   limit: 2000,
+
   bind(ev) {
     ev.on("messages.upsert", ({ messages, type }) => {
       if (type !== "notify" && type !== "append") return;
@@ -62,21 +55,14 @@ export const store = {
           updated = true;
         }
       }
-      if (updated) {
-        this.isDirty = true;
-      }
+      if (updated) this.isDirty = true;
     });
   },
 
   _cleanOldMessages() {
     if (this.messages.size > this.limit) {
-      const keysToDelete = Array.from(this.messages.keys()).slice(
-        0,
-        this.messages.size - this.limit,
-      );
-      for (const key of keysToDelete) {
-        this.messages.delete(key);
-      }
+      const keys = Array.from(this.messages.keys()).slice(0, this.messages.size - this.limit);
+      for (const k of keys) this.messages.delete(k);
     }
   },
 
@@ -84,8 +70,7 @@ export const store = {
     if (!this.isDirty) return;
     this.isDirty = false;
     try {
-      const obj = Object.fromEntries(this.messages);
-      await fs.promises.writeFile(filePath, JSON.stringify(obj));
+      await fs.promises.writeFile(filePath, JSON.stringify(Object.fromEntries(this.messages)));
     } catch (e) {
       this.isDirty = true;
       throw e;
@@ -94,33 +79,23 @@ export const store = {
 
   writeToFileSync(filePath) {
     if (!this.isDirty) return;
-    const obj = Object.fromEntries(this.messages);
-    fs.writeFileSync(filePath, JSON.stringify(obj));
+    fs.writeFileSync(filePath, JSON.stringify(Object.fromEntries(this.messages)));
     this.isDirty = false;
   },
 
   readFromFile(filePath) {
     try {
       const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      for (const [id, msg] of Object.entries(raw)) {
-        this.messages.set(id, msg);
-      }
+      for (const [id, msg] of Object.entries(raw)) this.messages.set(id, msg);
       this._cleanOldMessages();
-    } catch (e) {}
+    } catch {}
   },
 };
 
-export const getMessageFromStoreById = (id) => {
-  if (!id) return null;
-  return store.messages.get(id) || null;
-};
+export const getMessageFromStoreById = (id) => (id ? store.messages.get(id) || null : null);
 
-// ==========================================
-// AUDIO PROCESSING HELPERS
-// ==========================================
-
-export const convertToOpus = (input) => {
-  return new Promise((resolve, reject) => {
+export const convertToOpus = (input) =>
+  new Promise((resolve, reject) => {
     const output = new PassThrough();
     const buffers = [];
     const source = Buffer.isBuffer(input) ? Readable.from(input) : input;
@@ -137,10 +112,9 @@ export const convertToOpus = (input) => {
     output.on("data", (chunk) => buffers.push(chunk));
     output.on("end", () => resolve(Buffer.concat(buffers)));
   });
-};
 
-export const toMp3 = (input, output, bitrate = 128) => {
-  return new Promise((res, rej) => {
+export const toMp3 = (input, output, bitrate = 128) =>
+  new Promise((res, rej) => {
     ffmpeg(input)
       .noVideo()
       .audioCodec("libmp3lame")
@@ -150,20 +124,10 @@ export const toMp3 = (input, output, bitrate = 128) => {
       .on("error", rej)
       .save(output);
   });
-};
 
-// ==========================================
-// STICKER ENGINE (BRAT & UNIVERSAL WEBPMUX)
-// ==========================================
-
-export const convertToStickerWebp = (inputFile, isVideo = false) => {
-  return new Promise((resolve, reject) => {
-    const randomId = crypto.randomBytes(4).toString("hex");
-    const outputFile = path.join(
-      tmpdir(),
-      `yenvy_canvas_sticker_${randomId}.webp`,
-    );
-
+export const convertToStickerWebp = (inputFile, isVideo = false) =>
+  new Promise((resolve, reject) => {
+    const outputFile = path.join(tmpdir(), `yenvy_canvas_sticker_${crypto.randomBytes(4).toString("hex")}.webp`);
     const args = [
       "-i",
       inputFile,
@@ -173,10 +137,7 @@ export const convertToStickerWebp = (inputFile, isVideo = false) => {
       "scale=512:512:flags=lanczos:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000",
     ];
 
-    if (isVideo) {
-      args.push("-loop", "0", "-preset", "default", "-r", "15", "-t", "5");
-    }
-
+    if (isVideo) args.push("-loop", "0", "-preset", "default", "-r", "15", "-t", "5");
     args.push("-y", outputFile);
 
     execFile(ffmpegInstaller.path, args, (err) => {
@@ -184,47 +145,35 @@ export const convertToStickerWebp = (inputFile, isVideo = false) => {
       resolve(outputFile);
     });
   });
-};
 
 export const stickerToImage = async (buf) => {
   const sharp = (await import("sharp")).default;
   return sharp(buf).trim().png().toBuffer();
 };
 
-// ==========================================
-// SYSTEM MISC MEDIA UTILITIES
-// ==========================================
-
 export const getMedia = async (m, sock) => {
   const q = m.quoted || m;
   const mime = (q.msg || q).mimetype || "";
-  const buffer =
-    (await q.download?.()) ||
-    (sock ? await downloadMediaMessage(q, "buffer").catch(() => null) : null);
+  const buffer = (await q.download?.()) || (sock ? await downloadMediaMessage(q, "buffer").catch(() => null) : null);
   return { mime, buffer };
 };
 
-export const createTemp = (ext) =>
-  path.join(tmpdir(), `yenvy_${Date.now()}.${ext}`);
+export const createTemp = (ext) => path.join(tmpdir(), `yenvy_${Date.now()}.${ext}`);
 
-export const cleanup = (...files) =>
-  files.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+export const cleanup = (...files) => {
+  for (const f of files) {
+    try {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    } catch {}
+  }
+};
 
 export const toGif = (input, output) =>
   new Promise((res, rej) => {
     ffmpeg(input)
-      .outputOptions([
-        "-vf",
-        "scale=480:-1:flags=lanczos,fps=12",
-        "-loop",
-        "0",
-        "-t",
-        "10",
-        "-pix_fmt",
-        "yuv420p",
-      ])
+      .outputOptions(["-vf", "scale=480:-1:flags=lanczos,fps=12", "-loop", "0", "-t", "10", "-pix_fmt", "yuv420p"])
       .toFormat("mp4")
-      .on("end", () => res())
+      .on("end", res)
       .on("error", rej)
       .save(output);
   });
@@ -273,18 +222,11 @@ export const convertToMp4 = async (input) => {
   }
 };
 
-// ==========================================
-// CORE SOCKET COUPLING WRAPPER (MAIN EXTENSION)
-// ==========================================
-
 export default async function wrapSocket(sock) {
-  // Ikat event socket ke store agar otomatis mencatat seluruh traffic pesan masuk/keluar
   store.bind(sock.ev);
-
   const oldSendMessage = sock.sendMessage;
   sock.generateMessageID = generateMessageID;
 
-  // OVERRIDE SENDMESSAGE WITH EXPIRED MANAGER
   sock.sendMessage = async (jid, content, options = {}) => {
     if (!jid || !content) return;
     if (!content.contextInfo) content.contextInfo = {};
@@ -293,55 +235,24 @@ export default async function wrapSocket(sock) {
       const duration = groupCache.get(jid);
       if (duration) content.contextInfo.expiration = duration;
     }
-    return await oldSendMessage.call(sock, jid, content, options);
+    return oldSendMessage.call(sock, jid, content, options);
   };
 
-  // QUICK MEDIA SHORTCUT SENDERS
   sock.sendImage = (jid, p, cap = "", q = "", opts = {}) =>
-    sock.sendMessage(
-      jid,
-      { image: Buffer.isBuffer(p) ? p : { url: p }, caption: cap, ...opts },
-      { quoted: q },
-    );
+    sock.sendMessage(jid, { image: Buffer.isBuffer(p) ? p : { url: p }, caption: cap, ...opts }, { quoted: q });
 
   sock.sendVideo = (jid, p, cap = "", q = "", gif = false, opts = {}) =>
-    sock.sendMessage(
-      jid,
-      {
-        video: Buffer.isBuffer(p) ? p : { url: p },
-        caption: cap,
-        gifPlayback: gif,
-        ...opts,
-      },
-      { quoted: q },
-    );
+    sock.sendMessage(jid, { video: Buffer.isBuffer(p) ? p : { url: p }, caption: cap, gifPlayback: gif, ...opts }, { quoted: q });
 
   sock.sendAudio = async (jid, p, ptt = false, q = "", opts = {}) => {
     const src = Buffer.isBuffer(p) ? p : { url: p };
     const buffer = ptt ? await convertToOpus(Buffer.isBuffer(p) ? p : p) : src;
-    return sock.sendMessage(
-      jid,
-      {
-        audio: buffer,
-        ptt,
-        mimetype: ptt ? "audio/ogg; codecs=opus" : "audio/mpeg",
-        ...opts,
-      },
-      { quoted: q },
-    );
+    return sock.sendMessage(jid, { audio: buffer, ptt, mimetype: ptt ? "audio/ogg; codecs=opus" : "audio/mpeg", ...opts }, { quoted: q });
   };
 
-  // CORE STICKER GENERATOR (WITH ANIMATION SAFE-PARSING)
   sock.sendSticker = async (jid, buffer, quoted = "", options = {}) => {
-    const {
-      packname = config.botName,
-      author = config.ownerName,
-      isAnimated = false,
-    } = options;
-    const tmpIn = path.join(
-      tmpdir(),
-      `yenvy_in_${Date.now()}.${isAnimated ? "mp4" : "jpg"}`,
-    );
+    const { packname = config.botName, author = config.ownerName, isAnimated = false } = options;
+    const tmpIn = path.join(tmpdir(), `yenvy_in_${Date.now()}.${isAnimated ? "mp4" : "jpg"}`);
     const tmpOut = path.join(tmpdir(), `yenvy_out_${Date.now()}.webp`);
 
     fs.writeFileSync(tmpIn, buffer);
@@ -371,11 +282,7 @@ export default async function wrapSocket(sock) {
             img.exif = exif;
 
             const final = await img.save(null);
-            const res = await sock.sendMessage(
-              jid,
-              { sticker: final, ...options },
-              { quoted },
-            );
+            const res = await sock.sendMessage(jid, { sticker: final, ...options }, { quoted });
             cleanup(tmpIn, tmpOut);
             resolve(res);
           } catch (e) {
@@ -385,30 +292,15 @@ export default async function wrapSocket(sock) {
         });
 
       const ffOpts = [
-        "-vcodec",
-        "libwebp",
-        "-vf",
-        "scale=512:512:flags=lanczos:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=rgba",
-        "-lossless",
-        "1",
-        "-loop",
-        "0",
+        "-vcodec", "libwebp",
+        "-vf", "scale=512:512:flags=lanczos:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=rgba",
+        "-lossless", "1",
+        "-loop", "0",
         "-an",
       ];
-
       if (isAnimated) {
-        ffOpts.push(
-          "-preset",
-          "default",
-          "-t",
-          "00:00:10",
-          "-r",
-          "15",
-          "-qscale",
-          "20",
-        );
+        ffOpts.push("-preset", "default", "-t", "00:00:10", "-r", "15", "-qscale", "20");
       }
-
       ff.addOutputOptions(ffOpts).toFormat("webp").save(tmpOut);
     });
   };
@@ -416,16 +308,8 @@ export default async function wrapSocket(sock) {
   return sock;
 }
 
-// ==========================================
-// FEATURE SPECIFIC RENDERERS (CAROUSEL Engine)
-// ==========================================
-
-export async function buildCarouselMessage(
-  sock,
-  jid,
-  pins,
-  title = "Pinterest",
-) {
+export async function buildCarouselMessage(sock, jid, pins, title = "Pinterest") {
+  const sharp = (await import("sharp")).default;
   const cards = [];
 
   for (let i = 0; i < pins.length; i++) {
@@ -433,21 +317,12 @@ export async function buildCarouselMessage(
       const res = await fetch(pins[i].image);
       if (!res.ok) continue;
 
-      const buffer = Buffer.from(await res.arrayBuffer());
-      const sharp = (await import("sharp")).default;
-      const finalBuffer = await sharp(buffer).jpeg({ quality: 80 }).toBuffer();
-
-      const media = await prepareWAMessageMedia(
-        { image: finalBuffer },
-        { upload: sock.waUploadToServer },
-      );
+      const raw = Buffer.from(await res.arrayBuffer());
+      const finalBuffer = await sharp(raw).jpeg({ quality: 80 }).toBuffer();
+      const media = await prepareWAMessageMedia({ image: finalBuffer }, { upload: sock.waUploadToServer });
 
       cards.push({
-        header: {
-          title: `Result ${i + 1}/${pins.length}`,
-          hasMediaAttachment: true,
-          ...media,
-        },
+        header: { title: `Result ${i + 1}/${pins.length}`, hasMediaAttachment: true, ...media },
         body: { text: `Pinterest Image: ${title}` },
         footer: { text: "Pinterest search" },
         nativeFlowMessage: {
@@ -463,9 +338,7 @@ export async function buildCarouselMessage(
           ],
         },
       });
-    } catch (err) {
-      console.log("[Pinterest] Skip image:", err.message);
-    }
+    } catch {}
   }
 
   if (!cards.length) throw new Error("Semua gambar gagal diproses");
@@ -490,65 +363,28 @@ export async function buildCarouselMessage(
         },
       },
     },
-    { userJid: sock.user.id },
+    { userJid: sock.user.id }
   );
 }
 
 export function pickRandomPins(pins, total = 5) {
-  const shuffled = [...pins].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, total);
+  return [...pins].sort(() => 0.5 - Math.random()).slice(0, total);
 }
 
-// ==========================================
-// MULTI-CONTACT CARD GENERATOR (CONTACTS ARRAY)
-// ==========================================
-
-export const sendMultiContact = async (
-  sock,
-  jid,
-  contactList = [],
-  quoted = "",
-) => {
+export const sendMultiContact = async (sock, jid, contactList = [], quoted = "") => {
   try {
-    const displayName =
-      contactList.length > 0 ? contactList[0].name : "Contacts";
-    const processedContacts = [];
+    const displayName = contactList[0]?.name || "Contacts";
+    const processedContacts = contactList.map((person) => {
+      const clean = person.number.replace(/[^0-9]/g, "");
+      return {
+        vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${person.name}\nORG:Bot Owner;\nTEL;type=CELL;type=VOICE;waid=${clean}:+${clean}\nEND:VCARD`,
+      };
+    });
 
-    for (const person of contactList) {
-      const cleanNumber = person.number.replace(/[^0-9]/g, "");
-
-      const vcardData =
-        "BEGIN:VCARD\n" +
-        "VERSION:3.0\n" +
-        `FN:${person.name}\n` +
-        `ORG:Bot Owner;\n` +
-        `TEL;type=CELL;type=VOICE;waid=${cleanNumber}:+${cleanNumber}\n` +
-        "END:VCARD";
-
-      processedContacts.push({
-        vcard: vcardData,
-      });
-    }
-
-    return await sock.sendMessage(
-      jid,
-      {
-        contacts: {
-          displayName: `${displayName} and others`,
-          contacts: processedContacts,
-        },
-      },
-      { quoted },
-    );
+    return await sock.sendMessage(jid, { contacts: { displayName: `${displayName} and others`, contacts: processedContacts } }, { quoted });
   } catch (err) {
-    console.error("\x1b[1;31m[MULTI-CONTACT SENDER ERROR]\x1b[0m", err);
-    const lines = contactList.map(
-      (c) => `• *${c.name}:* https://wa.me/${c.number.replace(/[^0-9]/g, "")}`,
-    );
-    return await sock.sendMessage(
-      jid,
-      { text: `*LIST OWNER/DEVELOPER*\n\n${lines.join("\n")}` },
-      { quoted },
-    );
+    console.error("[MULTI-CONTACT SENDER ERROR]", err);
+    const lines = contactList.map((c) => `• *${c.name}:* https://wa.me/${c.number.replace(/[^0-9]/g, "")}`);
+    return await sock.sendMessage(jid, { text: `*LIST OWNER/DEVELOPER*\n\n${lines.join("\n")}` }, { quoted });
   }
 };

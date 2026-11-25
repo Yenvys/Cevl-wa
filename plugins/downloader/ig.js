@@ -1,138 +1,73 @@
-/**
- * plugins/download/instagram.js
- * Downloader Instagram via SiputZX API (sssinstagram + ummy fallback)
- */
-
-import axios from "axios";
 import { res } from "../../src/response.js";
+import { OmDownloader } from "../../src/omdown.js";
 
-async function igDL(url) {
-  // Primary: sssinstagram
-  try {
-    const { data } = await axios.get(
-      `https://api.siputzx.my.id/api/d/sssinstagram?url=${encodeURIComponent(url)}`,
-      { timeout: 60000 },
-    );
-    if (data?.status && data?.data) return data.data;
-  } catch (e) {
-    console.error("[IG_PRIMARY_ERR]", e.message);
-  }
-
-  // Backup: ummy
-  try {
-    const { data } = await axios.get(
-      `https://api.siputzx.my.id/api/d/ummy?url=${encodeURIComponent(url)}`,
-      { timeout: 60000 },
-    );
-    if (data?.status && data?.data) return data.data;
-  } catch (e) {
-    console.error("[IG_BACKUP_ERR]", e.message);
-  }
-
-  return null;
-}
-
-function pickBestMedia(urlList) {
-  if (!urlList || !Array.isArray(urlList) || urlList.length === 0) return null;
-
-  // Sort by quality descending, pick highest
-  const sorted = urlList.slice().sort((a, b) => (b.quality || 0) - (a.quality || 0));
-  return sorted[0];
-}
+const omDownloader = new OmDownloader();
+const NEWSLETTER_JID = "120363401731165846@newsletter";
 
 export default {
   cmd: ["ig", "igdl", "reels", "instagram"],
   category: "download",
   desc: "Download video/foto dari Instagram (reel/post/tv)",
   exec: async (m, { sock, query, command }) => {
-    if (!query) {
+    const urlMatch = (query || "").match(/(https?:\/\/[^\s]+)/i);
+    if (!urlMatch) {
       return m.reply(
-        res.format(m.prefix, command, `https://instagram.com/reel/xxx`),
+        res.format(
+          m.prefix,
+          `${command} <url>`,
+          "https://www.instagram.com/reel/...",
+          "Mendukung reels, post, video, dan carousel/slide foto",
+          "Download video/foto dari Instagram"
+        )
       );
     }
 
-    const url = query.trim();
-    if (!/instagram\.com/i.test(url)) {
-      return m.reply("❌ URL harus dari Instagram (reel/post/tv).");
-    }
+    const url = urlMatch[0];
+    if (!/instagram\.com/i.test(url)) return m.reply(res.invalidUrl("Instagram (reel/post/tv)"));
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const data = await igDL(url);
-
-      if (!data || (!data.url?.length && !data.sd && !data.hd)) {
-        throw new Error("Media tidak ditemukan.");
-      }
+      const data = await omDownloader.resolve(url);
+      if (!data?.success) throw new Error("Gagal mengambil media Instagram.");
 
       const contextInfo = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: "120363401731165846@newsletter",
-          serverMessageId: 142,
-          newsletterName: "Cevl",
-        },
+        forwardedNewsletterMessageInfo: { newsletterJid: NEWSLETTER_JID, serverMessageId: 142, newsletterName: "Cevl" },
       };
 
-      const meta = data.meta || {};
       let capt = `*INSTAGRAM DOWNLOADER*\n`;
-      if (meta.username) capt += `> @${meta.username}\n`;
-      if (meta.title) capt += `> ${meta.title.substring(0, 200)}`;
+      if (data.author) capt += `> *Author:* ${data.author}\n`;
+      if (data.title) capt += `> *Deskripsi:* ${data.title.slice(0, 300)}\n`;
 
-      // Check if we have url array (video/photo items)
-      if (data.url && Array.isArray(data.url) && data.url.length > 0) {
-        const best = pickBestMedia(data.url);
+      const videoFmt = (data.formats || []).find((f) => f.dl && (f.kind === "video" || f.id.includes("video") || f.id.includes("sd") || f.id.includes("hd")));
 
-        if (!best) throw new Error("Media tidak ditemukan.");
-
-        const isVideo =
-          best.type === "mp4" ||
-          best.ext === "mp4" ||
-          best.name?.toLowerCase().includes("mp4");
-
-        if (isVideo) {
-          await sock.sendMessage(
-            m.from,
-            {
-              video: { url: best.url },
-              caption: capt,
-              mimetype: "video/mp4",
-              contextInfo,
-            },
-            { quoted: m },
-          );
-        } else {
-          await sock.sendMessage(
-            m.from,
-            {
-              image: { url: best.url },
-              caption: capt,
-              contextInfo,
-            },
-            { quoted: m },
-          );
-        }
-      } else if (data.hd || data.sd) {
-        // Fallback to hd/sd fields
-        const videoUrl = data.hd || data.sd;
+      if (videoFmt) {
+        const videoBuffer = await omDownloader.downloadBuffer(videoFmt.dl, { cookies: data.sessionCookies });
         await sock.sendMessage(
           m.from,
-          {
-            video: { url: videoUrl },
-            caption: capt,
-            mimetype: "video/mp4",
-            contextInfo,
-          },
-          { quoted: m },
+          { video: videoBuffer, caption: capt.trim(), mimetype: "video/mp4", contextInfo },
+          { quoted: m }
         );
+      } else if (data.slides?.length) {
+        for (let i = 0; i < data.slides.length; i++) {
+          const slide = data.slides[i];
+          const imgUrl = slide.downloadUrl || slide.imageUrl;
+          const imgBuffer = await omDownloader.downloadBuffer(imgUrl, { cookies: data.sessionCookies });
+          await sock.sendMessage(
+            m.from,
+            { image: imgBuffer, caption: i === 0 ? capt.trim() : undefined, contextInfo },
+            { quoted: i === 0 ? m : undefined }
+          );
+        }
+      } else {
+        throw new Error("Tidak ada berkas video atau foto yang dapat diunduh.");
       }
 
-      await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
     } catch (e) {
       console.error("[IG_DL_ERR]", e);
       await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-      await m.reply("❌ " + (e.message || "Gagal download media Instagram."));
+      await m.reply(res.error(`Gagal download media Instagram: ${e.message}`));
     }
   },
 };
