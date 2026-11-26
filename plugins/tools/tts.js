@@ -3,7 +3,7 @@ import { convertToOpus } from "../../src/helper.js";
 import { res } from "../../src/response.js";
 
 export default {
-  cmd: ["tts", "gtts"],
+  cmd: ["text2speech", "tts", "gtts"],
   category: "tools",
   desc: "Mengonversi teks ke audio suara (Text to Speech)",
 

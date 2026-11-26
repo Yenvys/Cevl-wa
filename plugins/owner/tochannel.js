@@ -36,7 +36,7 @@ const dlStream = async (msgNode, type) => {
 
 export default {
   cmd: ["tochannel", "tch", "saluran", "toch"],
-  category: "tools",
+  category: "owner",
   desc: "Meneruskan pesan, media, atau stiker audio ke saluran (newsletter)",
 
   exec: async (m, { sock, command }) => {
@@ -121,7 +121,7 @@ export default {
                 {},
                 { reuploadRequest: sock?.updateMediaMessage }
               );
-            } catch {}
+            } catch { }
           }
         }
 
@@ -129,7 +129,7 @@ export default {
         if (!aBuf && aud) {
           try {
             aBuf = await dlStream(aud, "audio");
-          } catch {}
+          } catch { }
           if (!aBuf) {
             try {
               aBuf = await downloadMediaMessage(
@@ -138,7 +138,7 @@ export default {
                 {},
                 { reuploadRequest: sock?.updateMediaMessage }
               );
-            } catch {}
+            } catch { }
           }
         }
 

@@ -73,7 +73,7 @@ const getQuotedSticker = (q) => {
 };
 
 export default {
-  cmd: ["rc", "reactsticker", "rsticker", "stikerreact"],
+  cmd: ["reactsticker", "rc", "rsticker", "stikerreact"],
   category: "owner",
   desc: "Kirim stiker reply (Sticker Reaction / STICKER_ANNOTATION) ke pesan target",
 
@@ -105,7 +105,7 @@ export default {
         );
       }
 
-      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => { });
 
       try {
         let buffer = null;
@@ -138,10 +138,10 @@ export default {
           cachedStickerTime = Date.now();
         }
 
-        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => {});
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => { });
         return m.reply(res.success("Stiker default reaction (*.rc*) berhasil disimpan!"));
       } catch (e) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
         return m.reply(res.error(`Gagal menyimpan stiker: ${e.message}`));
       }
     }
@@ -165,7 +165,7 @@ export default {
       );
     }
 
-    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
+    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => { });
 
     try {
       let stickerMessage = null;
@@ -173,7 +173,7 @@ export default {
       // 1. Jika pengguna memberikan URL langsung
       if (/^https?:\/\//i.test(input)) {
         if (/mmg\.whatsapp\.net|\.enc(\?|$)/i.test(input)) {
-          await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+          await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
           return m.reply(
             res.warn("Tautan .enc WhatsApp terenkripsi (membutuhkan mediaKey). Kirim stiker ke chat lalu reply dengan .rc set.")
           );
@@ -189,7 +189,7 @@ export default {
         try {
           webp = await toWebp(Buffer.from(resp.data));
         } catch {
-          await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+          await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
           return m.reply(res.warn("Berkas dari URL bukan berkas gambar atau stiker yang valid."));
         }
 
@@ -229,7 +229,7 @@ export default {
         }
 
         if (!stickerMessage) {
-          await sock.sendMessage(m.from, { react: { text: "⚠️", key: m.key } }).catch(() => {});
+          await sock.sendMessage(m.from, { react: { text: "⚠️", key: m.key } }).catch(() => { });
           return m.reply(
             res.warn(`Belum ada stiker default. Reply sebuah stiker lalu ketik *${m.prefix ?? "."}${command} set* terlebih dahulu.`)
           );
@@ -301,10 +301,10 @@ export default {
         if (i < count - 1) await new Promise((r) => setTimeout(r, 600));
       }
 
-      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => { });
     } catch (err) {
       console.error("[RC_ERR]", err);
-      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
       return m.reply(res.error(`Gagal mengirim reply stiker: ${err.message || ""}`));
     }
   },

@@ -9,8 +9,8 @@ import { sendCustomStickerPack } from "../../src/lib/stickerpack.js";
 const sessions = new Map();
 
 export default {
-  cmd: ["spsearch", "stickerly", "sps", "caristicker", "spacksearch"],
-  category: "tools",
+  cmd: ["packsearch", "stickerly", "sps", "caristicker", "spacksearch"],
+  category: "search",
   desc: "Mencari dan mengunduh sticker pack dari Sticker.ly secara interaktif",
 
   exec: async (m, { sock, args, query, command }) => {
@@ -23,7 +23,7 @@ export default {
           `${command} <kata kunci | link>`,
           ["kucing", "lucu", "https://sticker.ly/s/WTKUQD"],
           "• Bot akan mencari sticker pack di Sticker.ly\n" +
-          "• Balas (reply) pesan hasil pencarian dengan nomor urut (1 - 10) untuk mengunduh sticker pack secara otomatis 📦✨",
+          "• Balas (reply) pesan hasil pencarian dengan nomor urut (1 - 10) untuk mengunduh sticker pack secara otomatis",
           "Mencari dan mengunduh sticker pack dari Sticker.ly"
         )
       );
@@ -38,11 +38,11 @@ export default {
 
     // Jika direct link Sticker.ly, langsung unduh pack tersebut
     if (directPackId) {
-      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => { });
 
       const packDetails = await getStickerPackDetails(directPackId).catch(() => null);
       if (!packDetails || (packDetails.stickers?.length === 0 && packDetails.resourceFiles?.length === 0)) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
         return m.reply(res.error(`Gagal menemukan sticker pack dengan ID/link *${directPackId}*.`));
       }
 
@@ -56,7 +56,7 @@ export default {
 
       const stickerBuffers = await downloadAndProcessPack(packDetails, { maxStickers: 60, concurrency: 5 });
       if (!stickerBuffers || stickerBuffers.length === 0) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
         return m.reply(res.error(`Gagal mengunduh atau mengonversi stiker dari pack *${packDetails.name}*.`));
       }
 
@@ -66,16 +66,16 @@ export default {
         quoted: m,
       });
 
-      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => { });
       return;
     }
 
     // Pencarian normal berdasarkan kata kunci
-    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
+    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => { });
 
     const packs = await searchStickerPacks(q, 10);
     if (!packs || packs.length === 0) {
-      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
       return m.reply(res.error(`Tidak ditemukan sticker pack dengan kata kunci *"${q}"* di Sticker.ly. Silakan coba kata kunci lain.`));
     }
 
@@ -86,14 +86,13 @@ export default {
     packs.forEach((p, idx) => {
       const type = p.isAnimated ? "Animasi" : "Statis";
       listText += `*${idx + 1}. ${(p.name || "").trim()}*\n`;
-      listText += `>   • Author: ${(p.author || "").trim()}\n`;
-      listText += `>   • Tipe: ${type} (${p.count} stiker)\n`;
-      listText += `>   • ID: ${p.id}\n\n`;
+      listText += `> • Author: ${(p.author || "").trim()}\n`;
+      listText += `> • Tipe: ${type} (${p.count} stiker)\n`;
+      listText += `> • ID: ${p.id}\n\n`;
     });
 
-    listText += `> ────────────────────────\n`;
-    listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack!\n`;
-    listText += `> ⏱️ Sesi pemilihan berlaku selama 2 menit.`;
+    listText += `────────────────────────\n`;
+    listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack! ⏱️ berlaku selama 2 menit.\n`;
 
     const sent = await sock.sendMessage(m.from, { text: listText }, { quoted: m });
 
@@ -113,7 +112,7 @@ export default {
       timeout,
     });
 
-    await sock.sendMessage(m.from, { react: { text: "🔍", key: m.key } }).catch(() => {});
+    await sock.sendMessage(m.from, { react: { text: "🔍", key: m.key } }).catch(() => { });
   },
 
   after: async (m, { sock }) => {
@@ -135,7 +134,7 @@ export default {
     sessions.delete(m.from);
 
     const selected = session.packs[choice - 1];
-    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
+    await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => { });
 
     await sock.sendMessage(
       m.from,
@@ -157,7 +156,7 @@ export default {
       });
 
       if (!stickerBuffers || stickerBuffers.length === 0) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
         return m.reply(res.error(`Gagal mengunduh atau mengonversi stiker dari pack *"${selected.name}"*. Silakan coba pilihan lain.`));
       }
 
@@ -167,10 +166,10 @@ export default {
         quoted: m,
       });
 
-      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => { });
     } catch (err) {
       console.error("[STICKERLY DOWNLOAD ERROR]", err);
-      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
       return m.reply(res.error(`Terjadi kesalahan saat memproses sticker pack: ${err.message}`));
     }
   },

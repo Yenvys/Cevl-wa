@@ -123,7 +123,7 @@ async function ensurePatched() {
       const mod = await import(pkg);
       if (mod?.proto) patchProtoInstance(mod.proto);
       if (mod?.default?.proto) patchProtoInstance(mod.default.proto);
-    } catch {}
+    } catch { }
   }
 }
 
@@ -211,7 +211,7 @@ async function downloadBuffer(node, info, sock) {
     try {
       const buf = await node.download();
       if (buf && buf.length) return buf;
-    } catch {}
+    } catch { }
   }
 
   if (info?.mediaObj && info?.dlType && (info.mediaObj.mediaKey || info.mediaObj.directPath || info.mediaObj.url)) {
@@ -223,7 +223,7 @@ async function downloadBuffer(node, info, sock) {
       }
       const buf = Buffer.concat(chunks);
       if (buf.length) return buf;
-    } catch {}
+    } catch { }
   }
 
   if (node.fakeObj?.message || node.message) {
@@ -234,12 +234,12 @@ async function downloadBuffer(node, info, sock) {
         "buffer",
         {},
         {
-          logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
+          logger: { info: () => { }, error: () => { }, warn: () => { }, debug: () => { } },
           reuploadRequest: sock?.updateMediaMessage,
         }
       );
       if (buf?.length) return buf;
-    } catch {}
+    } catch { }
   }
 
   if (info?.mediaObj && info?.dlType) {
@@ -253,12 +253,12 @@ async function downloadBuffer(node, info, sock) {
         "buffer",
         {},
         {
-          logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
+          logger: { info: () => { }, error: () => { }, warn: () => { }, debug: () => { } },
           reuploadRequest: sock?.updateMediaMessage,
         }
       );
       if (buf?.length) return buf;
-    } catch {}
+    } catch { }
   }
 
   return null;
@@ -352,7 +352,7 @@ async function addStickerExif(webpBuffer, packname, author) {
       img.exif = exifData;
       return await img.save(null);
     }
-  } catch {}
+  } catch { }
   return injectExifRiffFallback(webpBuffer, exifData);
 }
 
@@ -406,8 +406,8 @@ async function videoBufferToAnimatedWebp(buffer, shouldCrop = false) {
     }
     return webp;
   } finally {
-    await fs.unlink(inPath).catch(() => {});
-    await fs.unlink(outPath).catch(() => {});
+    await fs.unlink(inPath).catch(() => { });
+    await fs.unlink(outPath).catch(() => { });
   }
 }
 
@@ -442,8 +442,8 @@ async function imageBufferToWebp(buffer, shouldCrop = false) {
       ]);
       return await fs.readFile(outPath);
     } finally {
-      await fs.unlink(inPath).catch(() => {});
-      await fs.unlink(outPath).catch(() => {});
+      await fs.unlink(inPath).catch(() => { });
+      await fs.unlink(outPath).catch(() => { });
     }
   }
 }
@@ -506,8 +506,8 @@ async function convertToOggOpus(buffer, ext = "mp3") {
     const realSeconds = parseFfmpegDuration(stderr);
     return { oggBuffer, realSeconds };
   } finally {
-    await fs.unlink(inPath).catch(() => {});
-    await fs.unlink(outPath).catch(() => {});
+    await fs.unlink(inPath).catch(() => { });
+    await fs.unlink(outPath).catch(() => { });
   }
 }
 
@@ -605,7 +605,7 @@ function startStickerSession({ m, sock, stickerBuffer, isAnimated, packname, aut
             text: `⏰ *SESI AUDIO STICKER BERAKHIR*\n> _Waktu tunggu ${SESSION_SECONDS} detik telah habis. Silakan kirim ulang foto jika ingin membuat Audio Sticker._`,
           },
           { quoted: m }
-        ).catch(() => {});
+        ).catch(() => { });
       }
     }
   }, SESSION_SECONDS * 1000);
@@ -696,7 +696,7 @@ async function consumeSessionWithAudio(m, sock, session, audioNode, audioInfo) {
 }
 
 export default {
-  cmd: ["sa", "saudio", "audiosticker", "stikeraudio", "stickeraudio"],
+  cmd: ["stickeraudio", "saudio", "audiosticker", "sa"],
   category: "tools",
   desc: "Membuat stiker gambar atau GIF bersuara (Audio Sticker) maks 25 detik",
 
