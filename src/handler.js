@@ -229,6 +229,17 @@ export class Handler {
     this.sock = sock;
     this.reloadCron();
 
+    // Plugin attach hooks
+    for (const [name, plugin] of this.plugins.entries()) {
+      if (typeof plugin?.attach === "function") {
+        try {
+          await plugin.attach.call(this, sock, { handler: this });
+        } catch (e) {
+          this.log.error("ATTACH_ERROR", `${name}: ${e.message}`);
+        }
+      }
+    }
+
     // Group Participant Update (Welcome / Goodbye)
     sock.ev.on("group-participants.update", async ({ id, participants, action }) => {
       try {
@@ -364,6 +375,29 @@ export class Handler {
             }
           }
         }
+
+        // Plugin before hooks
+        let stopExecution = false;
+        for (const [name, plugin] of this.plugins.entries()) {
+          if (typeof plugin?.before === "function") {
+            try {
+              const res = await plugin.before.call(this, m, {
+                sock,
+                handler: this,
+                isOwner: m.isOwner,
+                isBotAdmin: m.isBotAdmin,
+                isAdmin: m.isAdmin,
+              });
+              if (res === true) {
+                stopExecution = true;
+                break;
+              }
+            } catch (e) {
+              this.log.error("BEFORE_ERROR", `${name}: ${e.message}`);
+            }
+          }
+        }
+        if (stopExecution) continue;
 
         // Mode Check
         if (!m.isOwner) {

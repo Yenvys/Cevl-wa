@@ -3,6 +3,7 @@ import {
   generateWAMessageFromContent,
   prepareWAMessageMedia,
   downloadMediaMessage,
+  proto,
 } from "baileys";
 import crypto from "node:crypto";
 import ffmpeg from "fluent-ffmpeg";
@@ -388,3 +389,89 @@ export const sendMultiContact = async (sock, jid, contactList = [], quoted = "")
     return await sock.sendMessage(jid, { text: `*LIST OWNER/DEVELOPER*\n\n${lines.join("\n")}` }, { quoted });
   }
 };
+
+export function patchProtoInstance(p) {
+  const M = p?.Message;
+  if (!M || M.__audioStickerPatchedV3) return;
+
+  if (M.StickerMessage) {
+    const prevStickerEncode = M.StickerMessage.encode;
+    M.StickerMessage.encode = function (message, writer) {
+      const audio = message?.audioMessage;
+      if (audio && Object.prototype.hasOwnProperty.call(message, "audioMessage")) {
+        delete message.audioMessage;
+      }
+      const w = prevStickerEncode.call(this, message, writer);
+      if (audio && M.AudioMessage) {
+        message.audioMessage = audio;
+        M.AudioMessage.encode(audio, w.uint32(210).fork()).ldelim();
+      }
+      return w;
+    };
+
+    if (typeof M.StickerMessage.fromObject === "function") {
+      const prevStickerFromObj = M.StickerMessage.fromObject;
+      M.StickerMessage.fromObject = function (object) {
+        const msg = prevStickerFromObj.call(this, object);
+        if (object?.audioMessage) {
+          msg.audioMessage = M.AudioMessage?.fromObject
+            ? M.AudioMessage.fromObject(object.audioMessage)
+            : object.audioMessage;
+        }
+        return msg;
+      };
+    }
+  }
+
+  const prevMsgEncode = M.encode;
+  M.encode = function (message, writer) {
+    const asm = message?.audioStickerMessage;
+    if (asm) {
+      if (Object.prototype.hasOwnProperty.call(message, "stickerMessage")) {
+        delete message.stickerMessage;
+      }
+      if (Object.prototype.hasOwnProperty.call(message, "audioStickerMessage")) {
+        delete message.audioStickerMessage;
+      }
+    }
+    const w = prevMsgEncode.call(this, message, writer);
+    if (asm && M.FutureProofMessage) {
+      message.audioStickerMessage = asm;
+      M.FutureProofMessage.encode(asm, w.uint32(1074).fork()).ldelim();
+    }
+    return w;
+  };
+
+  if (typeof M.fromObject === "function") {
+    const prevMsgFromObj = M.fromObject;
+    M.fromObject = function (object) {
+      const msg = prevMsgFromObj.call(this, object);
+      if (object?.audioStickerMessage) {
+        const inner = object.audioStickerMessage.message || object.audioStickerMessage;
+        if (inner?.stickerMessage && object.audioStickerMessage.message?.stickerMessage?.audioMessage) {
+          inner.stickerMessage.audioMessage = object.audioStickerMessage.message.stickerMessage.audioMessage;
+        }
+        msg.audioStickerMessage = { message: inner };
+        delete msg.stickerMessage;
+        if (inner) {
+          Object.setPrototypeOf(msg, inner);
+        }
+      }
+      return msg;
+    };
+  }
+
+  M.__audioStickerPatchedV3 = true;
+}
+
+export async function ensureAudioStickerPatched() {
+  if (proto) patchProtoInstance(proto);
+  for (const pkg of ["baileys", "@whiskeysockets/baileys"]) {
+    try {
+      const mod = await import(pkg);
+      if (mod?.proto) patchProtoInstance(mod.proto);
+      if (mod?.default?.proto) patchProtoInstance(mod.default.proto);
+    } catch {}
+  }
+}
+

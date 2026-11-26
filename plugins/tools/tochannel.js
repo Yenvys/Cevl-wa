@@ -1,11 +1,41 @@
+import {
+  prepareWAMessageMedia,
+  generateWAMessageFromContent,
+  downloadContentFromMessage,
+} from "baileys";
+import { config } from "../../config.js";
 import { res } from "../../src/response.js";
+import { ensureAudioStickerPatched } from "../../src/helper.js";
 
-const NEWSLETTER_JID = "120363401731165846@newsletter";
+const DEFAULT_NEWSLETTER_JID = "120363401731165846@newsletter";
+
+const unwrapMessage = (obj) => {
+  let cur = obj;
+  for (let i = 0; i < 6 && cur; i++) {
+    const next =
+      cur.ephemeralMessage?.message ||
+      cur.viewOnceMessageV2?.message ||
+      cur.viewOnceMessageV2Extension?.message ||
+      cur.viewOnceMessage?.message ||
+      cur.documentWithCaptionMessage?.message ||
+      cur.editedMessage?.message;
+    if (!next) break;
+    cur = next;
+  }
+  return cur || {};
+};
+
+const dlStream = async (msgNode, type) => {
+  const stream = await downloadContentFromMessage(msgNode, type);
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+};
 
 export default {
   cmd: ["tochannel", "tch", "saluran", "toch"],
   category: "tools",
-  desc: "Meneruskan pesan/caption ke saluran (newsletter)",
+  desc: "Meneruskan pesan, media, atau stiker audio ke saluran (newsletter)",
 
   exec: async (m, { sock, command }) => {
     if (!m.quoted) {
@@ -13,48 +43,182 @@ export default {
         res.format(
           m.prefix,
           command,
-          ["", "caption baru"],
-          "Reply pesan atau media yang ingin diteruskan ke saluran",
-        ),
+          ["", "caption baru", "120363xxx@newsletter"],
+          "Reply pesan, media, atau stiker audio yang ingin diteruskan ke saluran",
+          "Meneruskan pesan, media, atau stiker audio ke saluran (newsletter)"
+        )
       );
+    }
+
+    const defaultChannel = global.idch || config.newsletterJid || DEFAULT_NEWSLETTER_JID;
+    let chJid = defaultChannel;
+    let customCaption = (m.query || "").trim();
+
+    const firstArg = (m.args[0] || "").trim();
+    if (firstArg.endsWith("@newsletter")) {
+      chJid = firstArg;
+      customCaption = m.args.slice(1).join(" ").trim();
     }
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
     try {
-      const { type = "", msg } = m.quoted;
-      const customCaption = m.query || "";
-      let text = "";
+      const q = m.quoted;
+      const rawMessage = q.message || {};
+      const unwrapped = unwrapMessage(rawMessage);
+      const qMsg = q.msg || unwrapped[q.type] || unwrapped;
 
-      if (["conversation", "extendedTextMessage"].includes(type)) {
-        text = m.quoted.text || msg?.text || "";
-      } else if (["imageMessage", "videoMessage", "documentMessage", "documentWithCaptionMessage"].includes(type)) {
-        text = msg?.caption || m.quoted.text || "";
+      // 1. Deteksi Stiker Audio (saudio)
+      const stc =
+        unwrapped.stickerMessage ||
+        (q.type === "stickerMessage" ? qMsg : null) ||
+        unwrapped.audioStickerMessage?.message?.stickerMessage ||
+        rawMessage.stickerMessage;
+
+      const aud =
+        stc?.audioMessage ||
+        unwrapped.audioStickerMessage?.message?.stickerMessage?.audioMessage ||
+        rawMessage.audioStickerMessage?.message?.stickerMessage?.audioMessage ||
+        qMsg?.audioMessage;
+
+      if (stc && aud) {
+        let sBuf = null;
+        try {
+          sBuf = await dlStream(stc, "sticker");
+        } catch {
+          sBuf = await q.download?.();
+        }
+
+        const aBuf = await dlStream(aud, "audio");
+
+        if (!sBuf || !aBuf) {
+          throw new Error("Gagal mengunduh berkas stiker audio.");
+        }
+
+        await ensureAudioStickerPatched();
+
+        const [sMed, aMed] = await Promise.all([
+          prepareWAMessageMedia({ sticker: sBuf }, { upload: sock.waUploadToServer, jid: chJid }),
+          prepareWAMessageMedia(
+            { audio: aBuf, mimetype: aud.mimetype || "audio/ogg; codecs=opus", ptt: aud.ptt ?? true },
+            { upload: sock.waUploadToServer, jid: chJid }
+          ),
+        ]);
+
+        if (stc.isAnimated) sMed.stickerMessage.isAnimated = true;
+        sMed.stickerMessage.audioMessage = aMed.audioMessage;
+
+        const msg = generateWAMessageFromContent(
+          chJid,
+          { stickerMessage: sMed.stickerMessage },
+          { userJid: sock.user?.id }
+        );
+        await sock.relayMessage(chJid, msg.message, { messageId: msg.key.id });
+
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Stiker audio berhasil diteruskan ke saluran!"));
       }
 
+      // 2. Deteksi Stiker Biasa (tanpa audio)
+      if (stc && !aud) {
+        let sBuf = null;
+        try {
+          sBuf = await dlStream(stc, "sticker");
+        } catch {
+          sBuf = await q.download?.();
+        }
+        if (!sBuf) throw new Error("Gagal mengunduh berkas stiker.");
+
+        const sMed = await prepareWAMessageMedia(
+          { sticker: sBuf, isAnimated: Boolean(stc.isAnimated) },
+          { upload: sock.waUploadToServer, jid: chJid }
+        );
+        if (stc.isAnimated) sMed.stickerMessage.isAnimated = true;
+
+        const msg = generateWAMessageFromContent(
+          chJid,
+          { stickerMessage: sMed.stickerMessage },
+          { userJid: sock.user?.id }
+        );
+        await sock.relayMessage(chJid, msg.message, { messageId: msg.key.id });
+
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Stiker berhasil diteruskan ke saluran!"));
+      }
+
+      // 3. Deteksi Gambar
+      if (q.type === "imageMessage" || unwrapped.imageMessage) {
+        const imgNode = unwrapped.imageMessage || qMsg;
+        const buf = await q.download?.();
+        if (!buf) throw new Error("Gagal mengunduh berkas gambar.");
+        const caption = customCaption || imgNode.caption || "";
+        await sock.sendMessage(chJid, { image: buf, caption });
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Gambar berhasil diteruskan ke saluran!"));
+      }
+
+      // 4. Deteksi Video / GIF
+      if (q.type === "videoMessage" || unwrapped.videoMessage) {
+        const vidNode = unwrapped.videoMessage || qMsg;
+        const buf = await q.download?.();
+        if (!buf) throw new Error("Gagal mengunduh berkas video.");
+        const caption = customCaption || vidNode.caption || "";
+        await sock.sendMessage(chJid, { video: buf, caption, gifPlayback: Boolean(vidNode.gifPlayback) });
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Video berhasil diteruskan ke saluran!"));
+      }
+
+      // 5. Deteksi Audio / Voice Note
+      if (q.type === "audioMessage" || unwrapped.audioMessage) {
+        const audNode = unwrapped.audioMessage || qMsg;
+        const buf = await q.download?.();
+        if (!buf) throw new Error("Gagal mengunduh berkas audio.");
+        await sock.sendMessage(chJid, {
+          audio: buf,
+          mimetype: audNode.mimetype || "audio/ogg; codecs=opus",
+          ptt: audNode.ptt ?? true,
+        });
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Audio berhasil diteruskan ke saluran!"));
+      }
+
+      // 6. Deteksi Dokumen
+      if (q.type === "documentMessage" || unwrapped.documentMessage) {
+        const docNode = unwrapped.documentMessage || qMsg;
+        const buf = await q.download?.();
+        if (!buf) throw new Error("Gagal mengunduh berkas dokumen.");
+        const caption = customCaption || docNode.caption || "";
+        await sock.sendMessage(chJid, {
+          document: buf,
+          mimetype: docNode.mimetype || "application/octet-stream",
+          fileName: docNode.fileName || "file",
+          caption,
+        });
+        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+        return m.reply(res.success("Dokumen berhasil diteruskan ke saluran!"));
+      }
+
+      // 7. Pesan Teks
+      let text = q.text || qMsg?.text || unwrapped.conversation || "";
       if (customCaption) {
         text = text ? `${customCaption}\n\n${text}` : customCaption;
       }
 
       if (!text) {
         await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-        return m.reply(res.empty("Tidak ada teks atau caption yang dapat diteruskan."));
+        return m.reply(res.empty("Tidak ada teks, media, atau stiker audio yang dapat diteruskan."));
       }
 
-      await sock.sendMessage(NEWSLETTER_JID, { text });
+      await sock.sendMessage(chJid, { text });
       await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
-
-      if (!["conversation", "extendedTextMessage"].includes(type)) {
-        return m.reply(res.success("Caption berhasil diteruskan ke saluran!"));
-      }
       return m.reply(res.success("Pesan teks berhasil diteruskan ke saluran!"));
     } catch (err) {
       console.error("[TOCHANNEL_ERR]", err);
       await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
       if (err.message?.includes("not-authorized") || err.message?.includes("403")) {
-        return m.reply(res.warn("Bot bukan admin di saluran tujuan! Pastikan bot sudah menjadi admin."));
+        return m.reply(res.warn("Bot bukan admin di saluran tujuan! Pastikan bot sudah menjadi admin di saluran tersebut."));
       }
-      return m.reply(res.error(`Gagal meneruskan ke saluran: ${err.message || ""}`));
+      return m.reply(res.error(`Gagal meneruskan ke saluran: ${err.message || "Terjadi kesalahan internal"}`));
     }
   },
 };
