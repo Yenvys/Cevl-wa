@@ -4,6 +4,7 @@ import { imageToWebp, videoToWebp, writeExifImg, writeExifVid, addExif } from ".
 import { sendCustomStickerPack, classifySticker } from "../../src/lib/stickerpack.js";
 import { config } from "../../config.js";
 import { res } from "../../src/response.js";
+import { getAlbumMessages, albumCache } from "../../src/helper.js";
 
 const getMediaBuffer = async (sock, msgObj) => {
   if (!msgObj) return null;
@@ -64,12 +65,13 @@ export default {
       const qFakeMsg = qFake.message || qFake.msg || {};
       const qMsgObj = m.quoted.message || m.quoted.msg || {};
 
-      const cachedAlbum = qId ? global.albumCache?.get?.(qId) : null;
+      const cachedAlbum = qId ? (albumCache?.get?.(qId) || global.albumCache?.get?.(qId)) : null;
       const isExplicitSpackCmd = command === "spack" || command === "stickerpack";
 
       // Cek apakah pesan quoted adalah ALBUM
       const isAlbumReply =
         m.quoted.mtype === "albumMessage" ||
+        m.quoted.type === "albumMessage" ||
         Boolean(qMsgObj?.albumMessage) ||
         Boolean(qFakeMsg?.albumMessage) ||
         Boolean(m.quoted.albumMessage) ||
@@ -77,17 +79,21 @@ export default {
         (Array.isArray(m.quoted.medias) && m.quoted.medias.length > 1) ||
         (Array.isArray(m.quoted.album) && m.quoted.album.length > 1) ||
         (Boolean(cachedAlbum?.isAlbum) &&
-          (cachedAlbum.parentId === qId || m.quoted.mtype === "albumMessage" || isExplicitSpackCmd));
+          (cachedAlbum.parentId === qId || m.quoted.mtype === "albumMessage" || m.quoted.type === "albumMessage" || isExplicitSpackCmd));
 
-      if (isAlbumReply) {
-        if (cachedAlbum && Array.isArray(cachedAlbum.messages) && cachedAlbum.messages.length > 0) {
+      const detectedAlbum = getAlbumMessages(m.from, qId, m.quoted);
+
+      if (isAlbumReply || (detectedAlbum && detectedAlbum.length > 1) || isExplicitSpackCmd) {
+        if (detectedAlbum && Array.isArray(detectedAlbum) && detectedAlbum.length > 0) {
+          targetMessages = detectedAlbum;
+        } else if (cachedAlbum && Array.isArray(cachedAlbum.messages) && cachedAlbum.messages.length > 0) {
           targetMessages = cachedAlbum.messages;
+        } else if (Array.isArray(m.quoted.album) && m.quoted.album.length > 0) {
+          targetMessages = m.quoted.album;
         } else if (Array.isArray(m.quoted.messages) && m.quoted.messages.length > 0) {
           targetMessages = m.quoted.messages;
         } else if (Array.isArray(m.quoted.medias) && m.quoted.medias.length > 0) {
           targetMessages = m.quoted.medias;
-        } else if (Array.isArray(m.quoted.album) && m.quoted.album.length > 0) {
-          targetMessages = m.quoted.album;
         } else if (qFakeMsg?.albumMessage?.messages || qMsgObj?.albumMessage?.messages) {
           targetMessages = qFakeMsg?.albumMessage?.messages || qMsgObj?.albumMessage?.messages;
         } else {
@@ -99,7 +105,12 @@ export default {
       }
     } else {
       // Pesan langsung dengan caption
-      targetMessages = [m];
+      const directAlbum = getAlbumMessages(m.from, m.id, m);
+      if (directAlbum && directAlbum.length > 1) {
+        targetMessages = directAlbum;
+      } else {
+        targetMessages = [m];
+      }
     }
 
     const validMediaList = [];

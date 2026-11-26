@@ -2,7 +2,7 @@ import { getContentType, jidNormalizedUser, downloadMediaMessage } from "baileys
 import db, { getLidMapping, saveContact, saveMetadata, syncParticipants } from "./database.js";
 import fs from "node:fs";
 import path from "node:path";
-import { getMessageFromStoreById, groupCache } from "./helper.js";
+import { getMessageFromStoreById, groupCache, getAlbumMessages } from "./helper.js";
 
 const GROUP_CACHE_TTL = 300000;
 const VIEW_ONCE_TYPES = new Set(["viewOnceMessageV2", "viewOnceMessage", "ephemeralMessage"]);
@@ -88,10 +88,18 @@ export async function serialize(sock, m) {
         id: stanzaId,
         participant: contextInfo.participant,
         type: qType,
+        mtype: qType,
         isViewOnce: ["viewOnceMessageV2", "viewOnceMessage"].includes(qType),
         message: qMessage,
         msg: qMsg,
         mimetype: qMsg?.mimetype || "",
+        album: getAlbumMessages(m.from, stanzaId, {
+          id: stanzaId,
+          type: qType,
+          sender: qJid,
+          message: qMessage,
+          msg: qMsg,
+        }),
         text:
           qType === "conversation"
             ? qMessage.conversation

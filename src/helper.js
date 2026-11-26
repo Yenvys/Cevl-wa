@@ -25,23 +25,260 @@ if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
 
 export const groupCache = new Map();
 
+export const albumCache = new Map();
+global.albumCache = albumCache;
+
+const recentMediaBurst = new Map();
+const MAX_ALBUM_CACHE = 300;
+
+function cleanAlbumCache() {
+  if (albumCache.size > MAX_ALBUM_CACHE) {
+    const keys = Array.from(albumCache.keys()).slice(0, albumCache.size - MAX_ALBUM_CACHE);
+    for (const k of keys) albumCache.delete(k);
+  }
+  const now = Date.now();
+  for (const [k, v] of recentMediaBurst) {
+    if (now - v.lastTime > 60000) recentMediaBurst.delete(k);
+  }
+}
+
+function trackAlbumMessage(msg, sock = null) {
+  if (!msg || !msg.key?.id || !msg.message) return;
+
+  const chat = msg.key.remoteJid;
+  const sender = msg.key.participant || msg.key.remoteJid;
+  const msgId = msg.key.id;
+
+  const assoc =
+    msg.message?.messageContextInfo?.messageAssociation ||
+    msg.message?.imageMessage?.contextInfo?.messageAssociation ||
+    msg.message?.videoMessage?.contextInfo?.messageAssociation ||
+    msg.message?.contextInfo?.messageAssociation;
+
+  const assocParentId = assoc?.parentMessageKey?.id;
+  const isAlbumHeader = Boolean(msg.message?.albumMessage);
+  const expectedCount = msg.message?.albumMessage?.expectedImageCount || 0;
+
+  const hasMedia = Boolean(
+    msg.message?.imageMessage ||
+    msg.message?.videoMessage ||
+    msg.message?.stickerMessage
+  );
+
+  if (hasMedia && typeof msg.download !== "function") {
+    msg.download = () =>
+      downloadMediaMessage(
+        msg,
+        "buffer",
+        {},
+        {
+          reuploadRequest: sock?.updateMediaMessage,
+          logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
+        }
+      ).catch(() => null);
+  }
+
+  // 1. If this message is the album placeholder / header
+  if (isAlbumHeader) {
+    let album = albumCache.get(msgId);
+    if (!album) {
+      album = {
+        isAlbum: true,
+        parentId: msgId,
+        chat,
+        sender,
+        expectedCount,
+        messages: [],
+        lastUpdated: Date.now(),
+      };
+      albumCache.set(msgId, album);
+    } else {
+      album.isAlbum = true;
+      album.expectedCount = expectedCount || album.expectedCount;
+      album.lastUpdated = Date.now();
+    }
+    return;
+  }
+
+  // 2. Explicit association
+  if (assocParentId) {
+    let album = albumCache.get(assocParentId);
+    if (!album) {
+      album = {
+        isAlbum: true,
+        parentId: assocParentId,
+        chat,
+        sender,
+        expectedCount: 0,
+        messages: [],
+        lastUpdated: Date.now(),
+      };
+      albumCache.set(assocParentId, album);
+    }
+    if (hasMedia && !album.messages.some((m) => m.key?.id === msgId)) {
+      album.messages.push(msg);
+      album.lastUpdated = Date.now();
+    }
+    albumCache.set(msgId, album);
+    return;
+  }
+
+  // 3. Media burst detection (multiple photos/videos sent within 6 seconds from same sender in chat)
+  if (hasMedia) {
+    const burstKey = `${chat}:${sender}`;
+    const now = Date.now();
+    const burst = recentMediaBurst.get(burstKey);
+
+    if (burst && now - burst.lastTime < 6000) {
+      burst.lastTime = now;
+      if (!burst.messages.some((m) => m.key?.id === msgId)) {
+        burst.messages.push(msg);
+      }
+      let album = albumCache.get(burst.parentId);
+      if (!album) {
+        album = {
+          isAlbum: true,
+          parentId: burst.parentId,
+          chat,
+          sender,
+          expectedCount: burst.messages.length,
+          messages: burst.messages,
+          lastUpdated: now,
+        };
+        albumCache.set(burst.parentId, album);
+      } else {
+        album.messages = burst.messages;
+        album.lastUpdated = now;
+      }
+      albumCache.set(msgId, album);
+      albumCache.set(burst.parentId, album);
+    } else {
+      recentMediaBurst.set(burstKey, {
+        lastTime: now,
+        parentId: msgId,
+        messages: [msg],
+      });
+    }
+  }
+}
+
+export function getAlbumMessages(chat, qId, quoted = null) {
+  if (!qId && !quoted) return [];
+
+  // 1. Direct albumCache lookup
+  if (qId && albumCache.has(qId)) {
+    const alb = albumCache.get(qId);
+    if (alb && Array.isArray(alb.messages) && alb.messages.length > 0) {
+      return alb.messages;
+    }
+  }
+
+  // 2. Check quoted properties
+  if (quoted) {
+    if (Array.isArray(quoted.messages) && quoted.messages.length > 0) return quoted.messages;
+    if (Array.isArray(quoted.medias) && quoted.medias.length > 0) return quoted.medias;
+    if (Array.isArray(quoted.album) && quoted.album.length > 0) return quoted.album;
+    if (quoted.albumMessage?.messages) return quoted.albumMessage.messages;
+    if (quoted.fakeObj?.message?.albumMessage?.messages) return quoted.fakeObj.message.albumMessage.messages;
+  }
+
+  // 3. Check store.rawMessages for parentId
+  let parentId = null;
+  const rawQuoted = qId ? store.rawMessages.get(qId) : null;
+  if (rawQuoted) {
+    parentId =
+      rawQuoted.message?.messageContextInfo?.messageAssociation?.parentMessageKey?.id ||
+      rawQuoted.message?.imageMessage?.contextInfo?.messageAssociation?.parentMessageKey?.id ||
+      rawQuoted.message?.videoMessage?.contextInfo?.messageAssociation?.parentMessageKey?.id;
+  }
+
+  if (parentId && albumCache.has(parentId)) {
+    const alb = albumCache.get(parentId);
+    if (alb?.messages?.length > 0) return alb.messages;
+  }
+
+  // 4. Scan store.rawMessages for matching parentId or qId
+  const searchId = parentId || qId;
+  if (searchId) {
+    const matched = [];
+    for (const [, raw] of store.rawMessages) {
+      if (chat && raw.key?.remoteJid !== chat) continue;
+      const pid =
+        raw.message?.messageContextInfo?.messageAssociation?.parentMessageKey?.id ||
+        raw.message?.imageMessage?.contextInfo?.messageAssociation?.parentMessageKey?.id ||
+        raw.message?.videoMessage?.contextInfo?.messageAssociation?.parentMessageKey?.id;
+      if (pid === searchId || raw.key?.id === searchId) {
+        const hasMedia = raw.message?.imageMessage || raw.message?.videoMessage || raw.message?.stickerMessage;
+        if (hasMedia && !matched.some((m) => m.key?.id === raw.key?.id)) {
+          matched.push(raw);
+        }
+      }
+    }
+    if (matched.length > 0) return matched;
+  }
+
+  // 5. Album message fallback scan by timestamp & sender
+  const isAlbumType =
+    quoted?.type === "albumMessage" ||
+    quoted?.mtype === "albumMessage" ||
+    Boolean(quoted?.msg?.albumMessage) ||
+    Boolean(rawQuoted?.message?.albumMessage);
+
+  if (isAlbumType) {
+    const matched = [];
+    const targetSender = quoted?.sender || quoted?.participant || rawQuoted?.key?.participant;
+    const refTime = rawQuoted?.messageTimestamp || (quoted?.messageTimestamp ? quoted.messageTimestamp : null);
+
+    for (const [, raw] of store.rawMessages) {
+      if (chat && raw.key?.remoteJid !== chat) continue;
+      if (targetSender) {
+        const sender = raw.key?.participant || raw.key?.remoteJid;
+        if (sender && !sender.includes(targetSender.split("@")[0])) continue;
+      }
+      const hasMedia = raw.message?.imageMessage || raw.message?.videoMessage;
+      if (!hasMedia) continue;
+
+      if (refTime && raw.messageTimestamp) {
+        if (Math.abs(raw.messageTimestamp - refTime) <= 60) {
+          if (!matched.some((m) => m.key?.id === raw.key?.id)) matched.push(raw);
+        }
+      } else {
+        matched.push(raw);
+      }
+    }
+
+    if (matched.length > 0) return matched;
+  }
+
+  return [];
+}
+
 export const store = {
   messages: new Map(),
+  rawMessages: new Map(),
   isDirty: false,
   limit: 2000,
 
-  bind(ev) {
+  bind(ev, sock = null) {
     ev.on("messages.upsert", ({ messages, type }) => {
       if (type !== "notify" && type !== "append") return;
       let added = false;
       for (const msg of messages) {
         if (!msg.key?.id || !msg.message) continue;
         this.messages.set(msg.key.id, msg.message);
+        this.rawMessages.set(msg.key.id, msg);
         added = true;
+
+        try {
+          trackAlbumMessage(msg, sock);
+        } catch (e) {
+          console.error("[ALBUM TRACK ERROR]", e);
+        }
       }
       if (added) {
         this.isDirty = true;
         this._cleanOldMessages();
+        cleanAlbumCache();
       }
     });
 
@@ -56,6 +293,16 @@ export const store = {
           });
           updated = true;
         }
+        if (this.rawMessages.has(update.key.id)) {
+          const prev = this.rawMessages.get(update.key.id);
+          this.rawMessages.set(update.key.id, {
+            ...prev,
+            message: {
+              ...(prev.message || {}),
+              ...update.message,
+            },
+          });
+        }
       }
       if (updated) this.isDirty = true;
     });
@@ -64,7 +311,10 @@ export const store = {
   _cleanOldMessages() {
     if (this.messages.size > this.limit) {
       const keys = Array.from(this.messages.keys()).slice(0, this.messages.size - this.limit);
-      for (const k of keys) this.messages.delete(k);
+      for (const k of keys) {
+        this.messages.delete(k);
+        this.rawMessages.delete(k);
+      }
     }
   },
 
@@ -225,7 +475,7 @@ export const convertToMp4 = async (input) => {
 };
 
 export default async function wrapSocket(sock) {
-  store.bind(sock.ev);
+  store.bind(sock.ev, sock);
   const oldSendMessage = sock.sendMessage;
   sock.generateMessageID = generateMessageID;
 
