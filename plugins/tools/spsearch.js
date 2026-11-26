@@ -79,21 +79,21 @@ export default {
       return m.reply(res.error(`Tidak ditemukan sticker pack dengan kata kunci *"${q}"* di Sticker.ly. Silakan coba kata kunci lain.`));
     }
 
-    let listText = `📦 *HASIL PENCARIAN STICKER.LY*\n`;
-    listText += `> Kata Kunci: *${q}*\n`;
-    listText += `> Ditemukan: *${packs.length} Sticker Pack*\n\n`;
+    let listText = `📦 HASIL PENCARIAN STICKER.LY\n`;
+    listText += `> Kata Kunci: ${q}\n`;
+    listText += `> Ditemukan: ${packs.length} Sticker Pack\n\n`;
 
     packs.forEach((p, idx) => {
-      const type = p.isAnimated ? "🎞️ Animasi" : "🖼️ Statis";
-      listText += `*${idx + 1}.* *${p.name}*\n`;
-      listText += `   • Author: *${p.author}*\n`;
-      listText += `   • Tipe: ${type} (${p.count} stiker)\n`;
-      listText += `   • ID: \`${p.id}\`\n\n`;
+      const type = p.isAnimated ? "Animasi" : "Statis";
+      listText += `*${idx + 1}. ${p.name}*\n`;
+      listText += `>   • Author: ${p.author}\n`;
+      listText += `>   • Tipe: ${type} (${p.count} stiker)\n`;
+      listText += `>   • ID: ${p.id}\n\n`;
     });
 
     listText += `────────────────────────\n`;
-    listText += `> 💬 *Balas (reply) pesan ini* dengan nomor pilihan (*1 - ${packs.length}*) untuk mengunduh sticker pack!\n`;
-    listText += `> ⏱️ _Sesi pemilihan berlaku selama 3 menit._`;
+    listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack!\n`;
+    listText += `> ⏱️ Sesi pemilihan berlaku selama 2 menit.`;
 
     const sent = await sock.sendMessage(m.from, { text: listText }, { quoted: m });
 
@@ -103,7 +103,7 @@ export default {
 
     const timeout = setTimeout(() => {
       sessions.delete(m.from);
-    }, 180000);
+    }, 120000);
 
     sessions.set(m.from, {
       messageId: sent?.key?.id,
