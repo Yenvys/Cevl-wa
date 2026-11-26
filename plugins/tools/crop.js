@@ -18,10 +18,51 @@ function formatBytes(bytes) {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
 
+/**
+ * Parse argumen crop untuk mendeteksi mode stiker, rentang detik (misal 5-10 / 5-10.15), atau durasi tunggal
+ */
+function parseCropArgs(args = []) {
+  const rawArgs = args.join(" ").toLowerCase();
+  const asSticker = rawArgs.includes("-s") || rawArgs.includes("--sticker") || rawArgs.includes("stiker");
+
+  // Format rentang waktu: contoh "5-10", "5-10.15", "0.5 - 7.25", "5:10", "5~10"
+  const rangeMatch = rawArgs.match(/(\d+(?:\.\d+)?)\s*[-~:]\s*(\d+(?:\.\d+)?)/);
+
+  let startTime = null;
+  let endTime = null;
+  let targetDuration = null;
+  let isRange = false;
+
+  if (rangeMatch) {
+    let s = parseFloat(rangeMatch[1]);
+    let e = parseFloat(rangeMatch[2]);
+    if (!isNaN(s) && !isNaN(e)) {
+      if (s > e) [s, e] = [e, s];
+      startTime = s;
+      endTime = e;
+      targetDuration = Math.max(0.01, e - s);
+      isRange = true;
+    }
+  } else {
+    // Format durasi tunggal: contoh "10", "10.15", "5.5" (bukan flag -s)
+    const singleMatch = rawArgs.match(/(?:^|\s)(\d+(?:\.\d+)?)(?:\s|$)/);
+    if (singleMatch) {
+      const val = parseFloat(singleMatch[1]);
+      if (!isNaN(val) && val > 0) {
+        startTime = 0;
+        endTime = val;
+        targetDuration = val;
+      }
+    }
+  }
+
+  return { asSticker, startTime, endTime, targetDuration, isRange };
+}
+
 export default {
   cmd: ["crop", "square", "kotak", "cropcenter", "crop11"],
   category: "tools",
-  desc: "Crop media gambar atau video lonjong menjadi kotak presisi (1:1 / 2:2)",
+  desc: "Crop media gambar atau video lonjong menjadi kotak presisi (1:1 / 2:2) dengan opsi potong durasi / rentang detik",
 
   exec: async (m, { sock, args, command }) => {
     const q = m.quoted || m;
@@ -37,26 +78,26 @@ export default {
       return m.reply(
         res.format(
           m.prefix,
-          `${command} [opsi/durasi]`,
+          `${command} [durasi / rentang] [-s]`,
           [
             "",
             "10",
+            "5-10",
+            "5-10.15",
+            "5-10 -s",
             "-s",
-            "5 -s",
           ],
           "Reply gambar atau video yang lonjong (persegi panjang / 2:3 / 9:16 / 16:9) untuk di-crop menjadi kotak (rasio 1:1).\n" +
           "Pilihan opsi:\n" +
-          "• angka : Memotong durasi video (contoh: 10 untuk memotong ke 10 detik)\n" +
-          "• -s    : Langsung mengonversi hasil crop menjadi stiker WhatsApp",
+          "• angka         : Potong durasi video dari awal (contoh: 10 untuk 10 detik pertama)\n" +
+          "• rentang (s-e) : Potong video di detik tertentu (contoh: 5-10 atau desimal 5-10.15)\n" +
+          "• -s            : Langsung mengonversi hasil crop menjadi stiker WhatsApp",
           "Crop media gambar atau video lonjong menjadi kotak presisi (1:1)"
         )
       );
     }
 
-    const rawArgs = args.join(" ").toLowerCase();
-    const asSticker = rawArgs.includes("-s") || rawArgs.includes("--sticker") || rawArgs.includes("stiker");
-    const durMatch = rawArgs.match(/\b(\d{1,3})\b/);
-    const targetDuration = durMatch ? parseInt(durMatch[1], 10) : null;
+    const { asSticker, startTime, endTime, targetDuration, isRange } = parseCropArgs(args);
 
     await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
@@ -80,9 +121,18 @@ export default {
           await fs.writeFile(tmpIn, buffer);
 
           try {
+            const animTimeOpts = [];
+            if (startTime !== null && startTime > 0) {
+              animTimeOpts.push("-ss", String(startTime));
+            }
+            if (targetDuration && targetDuration > 0) {
+              animTimeOpts.push("-t", String(targetDuration));
+            }
+
             await new Promise((resolve, reject) => {
               ffmpeg(tmpIn)
                 .outputOptions([
+                  ...animTimeOpts,
                   "-vf", "crop=min(iw\\,ih):min(iw\\,ih),scale=512:512,format=rgba,setsar=1",
                   "-c:v", "libwebp",
                   "-lossless", "0",
@@ -99,12 +149,19 @@ export default {
             if (asSticker || isSticker) {
               await sock.sendSticker(m.from, croppedBuf, m, { isAnimated: true });
             } else {
+              let caption = `*CROP MEDIA SELESAI*\n> • Tipe: GIF Animasi\n> • Rasio: Kotak Presisi (1:1)\n> • Pemotongan: Tengah (Center Crop)`;
+              if (isRange && startTime !== null && endTime !== null) {
+                caption += `\n> • Rentang: Detik ${startTime} - ${endTime} (${targetDuration.toFixed(2).replace(/\.?0+$/, "")} detik)`;
+              } else if (targetDuration) {
+                caption += `\n> • Durasi: Dipotong ke ${targetDuration.toFixed(2).replace(/\.?0+$/, "")} detik`;
+              }
+
               await sock.sendMessage(
                 m.from,
                 {
                   video: croppedBuf,
                   gifPlayback: true,
-                  caption: `*CROP MEDIA SELESAI*\n> • Tipe: GIF Animasi\n> • Rasio: Kotak Presisi (1:1)\n> • Pemotongan: Tengah (Center Crop)`,
+                  caption,
                 },
                 { quoted: m }
               );
@@ -148,21 +205,31 @@ export default {
         await fs.writeFile(tmpIn, buffer);
 
         try {
-          const ffOpts = [
-            "-vf", "crop=min(iw\\,ih):min(iw\\,ih),setsar=1",
-          ];
-
+          const timeOpts = [];
+          if (startTime !== null && startTime > 0) {
+            timeOpts.push("-ss", String(startTime));
+          }
           if (targetDuration && targetDuration > 0) {
-            ffOpts.unshift("-t", String(targetDuration));
+            const dur = asSticker ? Math.min(targetDuration, 8) : targetDuration;
+            timeOpts.push("-t", String(dur));
+          } else if (asSticker) {
+            timeOpts.push("-t", "7");
           }
 
+          const ffOpts = [...timeOpts];
+
           if (asSticker) {
-            const stickerDuration = targetDuration ? Math.min(targetDuration, 8) : 7;
-            ffOpts.unshift("-t", String(stickerDuration));
-            ffOpts[ffOpts.indexOf("-vf") + 1] = "fps=10,crop=min(iw\\,ih):min(iw\\,ih),scale=512:512,format=rgba,setsar=1";
-            ffOpts.push("-c:v", "libwebp", "-lossless", "0", "-q:v", "45", "-loop", "0", "-an");
+            ffOpts.push(
+              "-vf", "fps=10,crop=min(iw\\,ih):min(iw\\,ih),scale=512:512,format=rgba,setsar=1",
+              "-c:v", "libwebp",
+              "-lossless", "0",
+              "-q:v", "45",
+              "-loop", "0",
+              "-an"
+            );
           } else {
             ffOpts.push(
+              "-vf", "crop=min(iw\\,ih):min(iw\\,ih),setsar=1",
               "-vcodec", "libx264",
               "-pix_fmt", "yuv420p",
               "-preset", "faster",
@@ -191,8 +258,10 @@ export default {
               `> • Rasio     : Kotak Presisi (1:1 / Center)\n` +
               `> • Pemotongan: Tengah (Center Crop)`;
 
-            if (targetDuration) {
-              caption += `\n> • Durasi    : Dipotong ke ${targetDuration} detik`;
+            if (isRange && startTime !== null && endTime !== null) {
+              caption += `\n> • Rentang   : Detik ${startTime} - ${endTime} (${targetDuration.toFixed(2).replace(/\.?0+$/, "")} detik)`;
+            } else if (targetDuration) {
+              caption += `\n> • Durasi    : Dipotong ke ${targetDuration.toFixed(2).replace(/\.?0+$/, "")} detik`;
             }
 
             await sock.sendMessage(
