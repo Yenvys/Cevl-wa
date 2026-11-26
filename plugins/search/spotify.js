@@ -18,7 +18,9 @@ class SpotifyEngine {
     this.secret = "376136387538459893883312310911992847112448894410210511297108";
     this.version = 61;
     this.clientVersion = "1.2.88.61.ge172202b";
+    this.tokenExpiresAt = 0;
     this.http = axios.create({
+      timeout: 15000,
       headers: {
         referer: "https://open.spotify.com/",
         origin: "https://open.spotify.com",
@@ -38,9 +40,11 @@ class SpotifyEngine {
     return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, "0");
   }
 
-  async getToken() {
+  async getToken(force = false) {
     try {
-      if (this.http.defaults.headers.authorization) return true;
+      if (!force && this.http.defaults.headers.authorization && Date.now() < this.tokenExpiresAt - 60000) {
+        return true;
+      }
       const sts = Math.floor(Date.now() / 1000);
       const { data: token } = await this.http.get("https://open.spotify.com/api/token", {
         params: {
@@ -51,6 +55,8 @@ class SpotifyEngine {
           totpVer: String(this.version),
         },
       });
+
+      this.tokenExpiresAt = Number(token.accessTokenExpirationTimestampMs) || (Date.now() + 30 * 60 * 1000);
 
       const { data: client } = await this.http.post("https://clienttoken.spotify.com/v1/clienttoken", {
         client_data: {
@@ -69,65 +75,133 @@ class SpotifyEngine {
       });
       return true;
     } catch {
+      this.http.defaults.headers.authorization = undefined;
       return false;
     }
   }
 
-  async search(query) {
-    if (!(await this.getToken())) throw new Error("Gagal generate token internal.");
-    const { data: res } = await this.http.post("https://api-partner.spotify.com/pathfinder/v2/query", {
-      variables: { searchTerm: query, offset: 0, limit: 10, numberOfTopResults: 5 },
-      operationName: "searchDesktop",
-      extensions: { persistedQuery: { version: 1, sha256Hash: "21b3fe49546912ba782db5c47e9ef5a7dbd20329520ba0c7d0fcfadee671d24e" } },
-    });
-
-    const items = res.data?.searchV2?.tracksV2?.items || res.data?.searchV2?.topResultsV2?.itemsV2 || [];
-    return items.map((item) => {
-      const t = item.item?.data || item.data;
-      if (!t) return null;
-      const id = t.uri?.split(":")[2] || null;
-      return {
-        id,
-        url: id ? `${BASE_URL}/track/${id}` : null,
-        name: t.name || "Unknown",
-        duration_ms: t.duration?.totalMilliseconds || 0,
-        artists: (t.artists?.items || []).map((a) => ({ name: a.profile?.name || "Unknown Artist" })),
-        album: {
-          name: t.albumOfTrack?.name || null,
-          images: (t.albumOfTrack?.coverArt?.sources || []).map((s) => ({ url: s.url })),
+  async searchPathfinder(query) {
+    if (!(await this.getToken())) return null;
+    try {
+      const { data: res } = await this.http.post("https://api-partner.spotify.com/pathfinder/v2/query", {
+        variables: {
+          searchTerm: query,
+          offset: 0,
+          limit: 10,
+          numberOfTopResults: 5,
+          includeAudiobooks: false, // Wajib di skema GraphQL Spotify terbaru agar tidak 400 Bad Request
         },
-      };
-    }).filter(Boolean);
+        operationName: "searchDesktop",
+        extensions: {
+          persistedQuery: {
+            version: 1,
+            sha256Hash: "21b3fe49546912ba782db5c47e9ef5a7dbd20329520ba0c7d0fcfadee671d24e",
+          },
+        },
+      });
+
+      const items = res.data?.searchV2?.tracksV2?.items || res.data?.searchV2?.topResultsV2?.itemsV2 || [];
+      const parsed = items.map((item) => {
+        const t = item.item?.data || item.data;
+        if (!t) return null;
+        const id = t.uri?.split(":")[2] || null;
+        return {
+          id,
+          url: id ? `${BASE_URL}/track/${id}` : null,
+          name: t.name || "Unknown",
+          duration_ms: t.duration?.totalMilliseconds || 0,
+          artists: (t.artists?.items || []).map((a) => ({ name: a.profile?.name || "Unknown Artist" })),
+          album: {
+            name: t.albumOfTrack?.name || "Single",
+            images: (t.albumOfTrack?.coverArt?.sources || []).map((s) => ({ url: s.url })),
+          },
+        };
+      }).filter(Boolean);
+
+      return parsed.length ? parsed : null;
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        await this.getToken(true);
+      }
+      return null;
+    }
+  }
+
+  async searchOmegatech(query) {
+    try {
+      const { data } = await axios.get("https://api.omegatech.app/api/Search/Spotify", {
+        params: { action: "search", query },
+        timeout: 15000,
+      });
+
+      const tracks = data?.tracks || [];
+      if (!tracks.length) return null;
+
+      return tracks.map((t) => ({
+        id: t.id,
+        url: t.url || (t.id ? `${BASE_URL}/track/${t.id}` : null),
+        name: t.title || "Unknown",
+        duration_ms: t.durationMs || 0,
+        artists: (t.artist || "").split(",").map((a) => ({ name: a.trim() })),
+        album: {
+          name: t.album || "Single",
+          images: t.thumb ? [{ url: t.thumb }] : [],
+        },
+      }));
+    } catch {
+      return null;
+    }
+  }
+
+  async search(query) {
+    // 1. Coba GraphQL Pathfinder resmi
+    let results = await this.searchPathfinder(query);
+    if (results && results.length) return results;
+
+    // 2. Fallback otomatis ke Omegatech Spotify Search
+    results = await this.searchOmegatech(query);
+    if (results && results.length) return results;
+
+    return [];
   }
 
   async download(url) {
-    const { data: res } = await axios.post("https://musicfab.io/api/spotify", { url }, {
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-        Origin: "https://musicfab.io",
-        Referer: "https://musicfab.io/",
-      },
-    });
+    try {
+      const { data: res } = await axios.post("https://musicfab.io/api/spotify", { url }, {
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+          Origin: "https://musicfab.io",
+          Referer: "https://musicfab.io/",
+        },
+        timeout: 30000,
+      });
 
-    const meta = res?.data?.metadata;
-    if (!meta) throw new Error("Gagal mengambil audio dari musicfab");
-    return {
-      name: meta.name || "Unknown",
-      artist: meta.artist || "Unknown Artist",
-      album: meta.album || "Single",
-      url,
-      download: meta.download,
-    };
+      const meta = res?.data?.metadata || res?.data?.data?.metadata;
+      if (meta && (meta.download || meta.downloadUrl)) {
+        const rawDl = meta.download || meta.downloadUrl;
+        const dlUrl = rawDl.startsWith("http") ? rawDl : `https://musicfab.io${rawDl}`;
+        return {
+          name: meta.name || "Unknown",
+          artist: meta.artist || "Unknown Artist",
+          album: meta.album || "Single",
+          url,
+          download: dlUrl,
+        };
+      }
+    } catch {}
+
+    throw new Error("Gagal mengambil audio dari server Spotify downloader");
   }
 }
 
 const spotify = new SpotifyEngine();
 
 export default {
-  cmd: ["spotify", "spotsearch", "spsearch"],
+  cmd: ["spotify", "spotsearch", "sp"],
   category: "search",
   desc: "Cari dan download musik dari Spotify",
+
   exec: async (m, { sock, query, command }) => {
     if (!query) {
       return m.reply(
@@ -136,8 +210,8 @@ export default {
           command,
           "lathi",
           "Masukkan kata kunci judul lagu atau nama penyanyi",
-          "Cari dan dengarkan lagu dari Spotify",
-        ),
+          "Cari dan dengarkan lagu dari Spotify"
+        )
       );
     }
 
@@ -146,9 +220,11 @@ export default {
 
     try {
       const items = await spotify.search(query);
-      if (!items.length) return sock.sendMessage(m.from, { text: res.empty("Lagu tidak ditemukan."), edit: sentLoading.key });
+      if (!items.length) {
+        return sock.sendMessage(m.from, { text: res.empty("Lagu tidak ditemukan di Spotify."), edit: sentLoading.key });
+      }
 
-      const tracks = items.slice(0, 5).map((t) => ({
+      const tracks = items.slice(0, 10).map((t) => ({
         title: t.name,
         artist: t.artists.map((a) => a.name).join(", "),
         album: t.album.name || "Single",
@@ -158,19 +234,24 @@ export default {
       }));
 
       const speed = ((Date.now() - start) / 1000).toFixed(2);
-      let txt = `*SPOTIFY SEARCH*\n> _Query: "${query}"_\n> Speed: ${speed}s | Total: ${tracks.length}\n\n`;
+      let txt = `*SPOTIFY SEARCH*\n> _Query: "${query}"_\n> Speed: ${speed}s | Ditemukan: ${tracks.length}\n\n`;
       tracks.forEach((t, i) => {
         txt += `*${i + 1}. ${t.title} - ${t.duration}*\n> 👤 *Artist:* ${t.artist}\n`;
       });
-      txt += `\n_📌 *Reply dengan angka (1-${tracks.length})* untuk download lagu!_`;
+      txt += `\n_📌 *Reply pesan ini dengan nomor (1 - ${tracks.length})* untuk mendownload lagu!_`;
 
       if (!sock.spotifySession) sock.spotifySession = {};
-      sock.spotifySession[m.sender] = { tracks, expired: Date.now() + 60000, isDone: false };
+      sock.spotifySession[m.sender] = {
+        tracks,
+        messageId: sentLoading?.key?.id,
+        expired: Date.now() + 120000,
+        isDone: false,
+      };
 
       return await sock.sendMessage(m.from, { text: txt, edit: sentLoading.key });
     } catch (e) {
-      console.error(e);
-      return sock.sendMessage(m.from, { text: `Error Spotify Search\n${e.message}`, edit: sentLoading.key });
+      console.error("[SPOTIFY_SEARCH_ERROR]", e);
+      return sock.sendMessage(m.from, { text: res.error(`Gagal mencari lagu: ${e.message}`), edit: sentLoading.key });
     }
   },
 
@@ -181,7 +262,11 @@ export default {
       return;
     }
 
-    const index = parseInt((m.text || m.body || "").trim(), 10) - 1;
+    const quotedId = m.quoted?.id || m.quoted?.key?.id;
+    if (session.messageId && quotedId && quotedId !== session.messageId) return;
+
+    const bodyText = (m.text || m.body || "").trim();
+    const index = parseInt(bodyText, 10) - 1;
     if (isNaN(index) || index < 0 || index >= session.tracks.length) return;
 
     const selectedTrack = session.tracks[index];
@@ -189,11 +274,11 @@ export default {
     delete sock.spotifySession[m.sender];
 
     try {
-      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
+      await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
       const dlResult = await spotify.download(selectedTrack.url);
       if (!dlResult?.download) {
-        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-        return m.reply("_Download gagal._");
+        await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+        return m.reply(res.error("Download audio gagal. Silakan coba lagu lain."));
       }
 
       let imageBuffer = Buffer.alloc(0);
@@ -209,7 +294,7 @@ export default {
           imgWidth = meta.width || 640;
           imgHeight = meta.height || 640;
           imageBuffer = await sharp(rawBuff).resize(200, 200, { fit: "cover" }).jpeg({ quality: 70 }).toBuffer();
-          mediaParams = await prepareWAMessageMedia({ image: rawBuff }, { upload: sock.waUploadToServer, mediaTypeOverride: "thumbnail-link" });
+          mediaParams = await prepareWAMessageMedia({ image: rawBuff }, { upload: sock.waUploadToServer, mediaTypeOverride: "thumbnail-link" }).catch(() => null);
         } catch {}
       }
 
@@ -239,14 +324,26 @@ export default {
 
       await sock.sendMessage(
         m.from,
-        { audio: { url: dlResult.download }, mimetype: "audio/mpeg", ptt: false },
+        {
+          audio: { url: dlResult.download },
+          mimetype: "audio/mpeg",
+          ptt: false,
+          fileName: `${dlResult.name}.mp3`,
+          contextInfo: {
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363401731165846@newsletter",
+              serverMessageId: 142,
+              newsletterName: "Cevl",
+            },
+          },
+        },
         { quoted: { key: { remoteJid: m.from, fromMe: true, id: sentDetail?.key?.id || m.key.id }, message: msg } }
       );
-      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+      await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } }).catch(() => {});
     } catch (e) {
-      console.error(e);
-      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-      await m.reply(`Error downloader\n\n${e.message || e}`);
+      console.error("[SPOTIFY_DOWNLOAD_ERROR]", e);
+      await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
+      await m.reply(res.error(`Gagal memproses musik: ${e.message || e}`));
     }
   },
 };
