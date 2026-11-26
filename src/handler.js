@@ -439,6 +439,7 @@ export class Handler {
               query: m.query,
               isAdmin: m.isAdmin,
               isBotAdmin: m.isBotAdmin,
+              isOwner: m.isOwner,
             });
           } catch (e) {
             this.log.error("EXEC_ERROR", e.message);

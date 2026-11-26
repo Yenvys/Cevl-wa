@@ -59,9 +59,15 @@ export default {
   category: "owner",
   desc: "Kelola daftar blacklist audio meresahkan untuk Audio Sticker & Auto-Delete (Khusus Owner)",
 
-  exec: async (m, { sock, command, args, isOwner }) => {
-    // Khusus Owner
-    if (!isOwner) {
+  exec: async (m, { sock, command, args, isOwner, isAdmin }) => {
+    const isOwn = Boolean(m.isOwner || isOwner);
+    const isAdm = Boolean(m.isAdmin || isAdmin);
+
+    // Izin akses: Owner bot atau Admin grup
+    if (m.isGroup && !isAdm && !isOwn) {
+      return m.reply(res.admin);
+    }
+    if (!m.isGroup && !isOwn) {
       return m.reply(res.owner);
     }
 
