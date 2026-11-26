@@ -20,7 +20,7 @@ export default {
         `> 📱 *Nomor:* @${m.sender.split("@")[0]}\n` +
         `> 💼 *Pekerjaan:* Pengangguran Sukses\n` +
         `> 💵 *Modal Awal:* ${formatYen(10000)}\n\n` +
-        `_📌 Catatan: Ketik *${m.prefix ?? "."}bursakerja* untuk mencari pekerjaan!_`;
+        `*Catatan :* _Ketik *${m.prefix ?? "."}bursakerja* untuk mencari pekerjaan!_`;
 
       return m.reply(teks, { mentions: [m.sender] });
     } catch (error) {

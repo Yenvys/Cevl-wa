@@ -22,7 +22,7 @@ export default {
         return row.user_jid;
       });
 
-      tagText += `\n_Catatan: Data ini mulai dihitung sejak bot aktif merekam chat._`;
+      tagText += `\n*Catatan :* _Data ini mulai dihitung sejak bot aktif merekam chat._`;
       await sock.sendMessage(m.from, { text: tagText, mentions }, { quoted: m });
     } catch (e) {
       console.error("[TOTALCHAT_ERR]", e);

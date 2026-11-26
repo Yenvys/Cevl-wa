@@ -747,7 +747,7 @@ export default {
 
       let durationNotice = "";
       if (isVideo && videoSeconds > MAX_DURATION) {
-        durationNotice = `_Catatan: Durasi video (${Math.round(videoSeconds)}s) otomatis dipotong ke ${MAX_DURATION}s agar sesuai batas WhatsApp._`;
+        durationNotice = `*Catatan :* _Durasi video (${Math.round(videoSeconds)}s) otomatis dipotong ke ${MAX_DURATION}s agar sesuai batas WhatsApp._`;
       }
 
       const visualData = await downloadBuffer(visualNode, visualInfo, sock);

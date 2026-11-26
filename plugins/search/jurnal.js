@@ -51,7 +51,7 @@ export default {
       results.forEach((r, i) => {
         teks += `*${i + 1}. ${r.title}*\n   ◦ *Penerbit:* _${r.info}_\n   ◦ *Tautan:* ${r.link}\n\n`;
       });
-      teks += `_Catatan: Beberapa dokumen mungkin membutuhkan akses institusi untuk Full PDF._`;
+      teks += `*Catatan :* _Beberapa dokumen mungkin membutuhkan akses institusi untuk Full PDF._`;
 
       await sock.sendMessage(m.from, { react: { text: "", key: m.key } });
       return m.reply(teks);

@@ -143,7 +143,6 @@ export default {
           m.prefix,
           `${command} [PackName|Author]`,
           ["", "PackName|Author"],
-          "Cara Penggunaan:\n" +
           "• Kirim foto/video dengan caption perintah ini\n" +
           "• Balas (reply) foto/video/stiker dengan perintah ini\n" +
           "• Balas (reply) Album foto/video untuk membuat Sticker Pack (spack) otomatis 📦✨",

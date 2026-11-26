@@ -476,7 +476,7 @@ export default {
       if (isSmaller) {
         infoText += `> • Penghematan : ${savedPercent}% (${formatBytes(savedBytes)} lebih hemat)`;
       } else {
-        infoText += `_Catatan: Berkas asli sudah sangat padat/terkompresi._`;
+        infoText += `\n*Catatan :* _Berkas asli sudah sangat padat/terkompresi._`;
       }
 
       // Pengiriman hasil kompresi sesuai tipe media

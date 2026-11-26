@@ -89,7 +89,7 @@ export const res = {
       if (raw.startsWith("_") && raw.endsWith("_")) {
         raw = raw.slice(1, -1).trim();
       }
-      raw = raw.replace(/^Catatan\s*:\s*/i, "").trim();
+      raw = raw.replace(/^[\*_]*Catatan\s*:\s*[\*_]*/i, "").trim();
 
       const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
       if (lines.length) {

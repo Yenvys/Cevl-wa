@@ -54,7 +54,7 @@ export default {
         await handler.changeAcTime("open", cronStr);
         let msg = `_Jadwal BUKA grup berhasil diubah menjadi: ${time} WIB (Hari: ${days})._`;
         if (days === "1-5") {
-          msg += `\n\n*Catatan:* Jika mengatur buka 1-5 (Senin-Jumat), grup tidak akan dibuka Sabtu pagi setelah tutup Jumat malam. Gunakan 1-6 jika ingin buka Sabtu pagi.`;
+          msg += `\n\n*Catatan :* _Jika mengatur buka 1-5 (Senin-Jumat), grup tidak akan dibuka Sabtu pagi setelah tutup Jumat malam. Gunakan 1-6 jika ingin buka Sabtu pagi._`;
         }
         return m.reply(msg);
       }
