@@ -29,20 +29,14 @@ export default {
       );
     }
 
-    // Cek apakah input berupa link langsung Sticker.ly atau pack code (5-8 karakter alfanumerik)
+    // Hanya jika input adalah URL link spesifik Sticker.ly (misal https://sticker.ly/s/CODE)
     let directPackId = null;
     if (q.includes("sticker.ly/s/")) {
       const parts = q.split("sticker.ly/s/")[1];
       directPackId = parts?.split(/[\/\?#\s]/)[0]?.trim().toUpperCase();
-    } else if (/^[A-Za-z0-9]{5,8}$/.test(q) && !q.includes(" ")) {
-      // Potensi direct pack ID
-      const directCheck = await getStickerPackDetails(q).catch(() => null);
-      if (directCheck && directCheck.stickers?.length > 0) {
-        directPackId = q.toUpperCase();
-      }
     }
 
-    // Jika link atau direct ID valid, langsung unduh pack tersebut
+    // Jika direct link Sticker.ly, langsung unduh pack tersebut
     if (directPackId) {
       await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } }).catch(() => {});
 
@@ -60,7 +54,7 @@ export default {
         { quoted: m }
       );
 
-      const stickerBuffers = await downloadAndProcessPack(packDetails, { maxStickers: 30, concurrency: 5 });
+      const stickerBuffers = await downloadAndProcessPack(packDetails, { maxStickers: 60, concurrency: 5 });
       if (!stickerBuffers || stickerBuffers.length === 0) {
         await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => {});
         return m.reply(res.error(`Gagal mengunduh atau mengonversi stiker dari pack *${packDetails.name}*.`));
@@ -146,7 +140,7 @@ export default {
     await sock.sendMessage(
       m.from,
       {
-        text: `📦 Menyiapkan dan mengunduh sticker pack *"${selected.name}"* (${selected.count} stiker) oleh *${selected.author}*...\nHarap tunggu sebentar, stiker sedang diproses ✨`,
+        text: `📦 Menyiapkan dan mengunduh sticker pack *"${selected.name}"* (${selected.count} stiker) oleh *${selected.author}*...\nHarap tunggu sebentar, pack sedang diproses ✨`,
       },
       { quoted: m }
     );
@@ -158,7 +152,7 @@ export default {
       }
 
       const stickerBuffers = await downloadAndProcessPack(packDetails, {
-        maxStickers: 30,
+        maxStickers: 60,
         concurrency: 5,
       });
 
