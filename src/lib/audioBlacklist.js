@@ -4,7 +4,9 @@
  */
 
 import crypto from "node:crypto";
+import { downloadContentFromMessage } from "baileys";
 import db from "../database.js";
+import { getMessageFromStoreById } from "../helper.js";
 
 // Inisialisasi Tabel Blacklist di SQLite
 db.exec(`
@@ -145,30 +147,81 @@ export function isBufferBlacklisted(buffer) {
 
 /**
  * Deteksi audioMessage di dalam pesan WhatsApp (baik di stiker bersuara maupun audio biasa)
+ * Mendukung pencarian di quotedMessage, root message context, dan store database
  */
-export function extractAudioMessage(m) {
-  if (!m) return null;
-  const msg = m.message || m.msg || m;
+export function extractAudioMessage(m, rootM = null) {
+  if (!m && !rootM) return null;
 
-  // Stiker bersuara (audioStickerMessage / stickerMessage.audioMessage)
+  // 1. Cek m langsung
+  const msg = m?.message || m?.msg || m;
+
   if (msg?.audioStickerMessage?.message?.stickerMessage?.audioMessage) {
     return msg.audioStickerMessage.message.stickerMessage.audioMessage;
   }
   if (msg?.stickerMessage?.audioMessage) {
     return msg.stickerMessage.audioMessage;
   }
-  if (m.stickerMessage?.audioMessage) {
+  if (m?.stickerMessage?.audioMessage) {
     return m.stickerMessage.audioMessage;
   }
-
-  // Audio biasa / Voice Note
   if (msg?.audioMessage) {
     return msg.audioMessage;
   }
-  if (m.audioMessage) {
+  if (m?.audioMessage) {
     return m.audioMessage;
   }
 
+  // 2. Cek di rootM (jika m adalah m.quoted)
+  const rootContext = rootM?.message?.extendedTextMessage?.contextInfo || rootM?.msg?.contextInfo || {};
+  const rawQuoted = rootContext?.quotedMessage;
+  if (rawQuoted) {
+    if (rawQuoted?.audioStickerMessage?.message?.stickerMessage?.audioMessage) {
+      return rawQuoted.audioStickerMessage.message.stickerMessage.audioMessage;
+    }
+    if (rawQuoted?.stickerMessage?.audioMessage) {
+      return rawQuoted.stickerMessage.audioMessage;
+    }
+    if (rawQuoted?.audioMessage) {
+      return rawQuoted.audioMessage;
+    }
+  }
+
+  // 3. Cek di store menggunakan stanzaId
+  const stanzaId = m?.id || rootContext?.stanzaId;
+  if (stanzaId) {
+    const fromStore = getMessageFromStoreById(stanzaId);
+    if (fromStore) {
+      if (fromStore?.audioStickerMessage?.message?.stickerMessage?.audioMessage) {
+        return fromStore.audioStickerMessage.message.stickerMessage.audioMessage;
+      }
+      if (fromStore?.stickerMessage?.audioMessage) {
+        return fromStore.stickerMessage.audioMessage;
+      }
+      if (fromStore?.audioMessage) {
+        return fromStore.audioMessage;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Mengunduh buffer audio langsung dari audioMessage Baileys
+ */
+export async function downloadAudioFromMessage(audioMsg) {
+  if (!audioMsg) return null;
+  if (audioMsg.mediaKey || audioMsg.directPath || audioMsg.url) {
+    try {
+      const stream = await downloadContentFromMessage(audioMsg, "audio");
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      const buf = Buffer.concat(chunks);
+      if (buf && buf.length > 0) return buf;
+    } catch (e) {
+      console.error("[DL_AUDIO_FROM_MSG_ERR]", e.message);
+    }
+  }
   return null;
 }
 

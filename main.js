@@ -8,7 +8,7 @@ import os from "os";
 import { startSock } from "./src/client.js";
 import { Handler } from "./src/handler.js";
 import { Logger } from "./src/logger.js";
-import { store } from "./src/helper.js";
+import { store, ensureAudioStickerPatched } from "./src/helper.js";
 import { listenAlertSchedule } from "./plugins/class/alert.js";
 import { backupDatabase } from "./src/database.js";
 
@@ -80,6 +80,7 @@ async function main() {
     logger: log,
   });
   await handler.initPlugins();
+  await ensureAudioStickerPatched();
 
   try {
     const onSocketReady = async (sock) => {

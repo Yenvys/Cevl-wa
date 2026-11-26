@@ -1,6 +1,7 @@
 /**
- * plugins/tools/sablacklist.js
+ * plugins/owner/sablacklist.js
  * Manajemen Blacklist Stiker Audio & Auto-Delete Stiker Audio Terlarang di Grup
+ * Kategori: Owner
  */
 
 import { execFile } from "node:child_process";
@@ -19,6 +20,8 @@ import {
   getHashesFromAudioMessage,
   checkMessageAudioBlacklist,
   isBufferBlacklisted,
+  isHashBlacklisted,
+  downloadAudioFromMessage,
 } from "../../src/lib/audioBlacklist.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,15 +56,12 @@ async function convertToOggOpusQuick(buffer) {
 
 export default {
   cmd: ["sablacklist", "sabl", "sablack"],
-  category: "tools",
-  desc: "Kelola daftar blacklist audio meresahkan untuk Audio Sticker & Auto-Delete",
+  category: "owner",
+  desc: "Kelola daftar blacklist audio meresahkan untuk Audio Sticker & Auto-Delete (Khusus Owner)",
 
-  exec: async (m, { sock, command, args, isOwner, isAdmin }) => {
-    // Izin akses: Owner atau Admin grup
-    if (m.isGroup && !isAdmin && !isOwner) {
-      return m.reply(res.admin);
-    }
-    if (!m.isGroup && !isOwner) {
+  exec: async (m, { sock, command, args, isOwner }) => {
+    // Khusus Owner
+    if (!isOwner) {
       return m.reply(res.owner);
     }
 
@@ -86,36 +86,61 @@ export default {
       await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
       try {
-        const audioMsg = extractAudioMessage(q);
+        const audioMsg = extractAudioMessage(q, m);
         const collectedHashes = [];
 
-        // Ambil hash langsung dari audioMessage jika tersedia
+        // 1. Jika audioMessage terdeteksi (stiker bersuara / VN / Audio)
         if (audioMsg) {
           const directHashes = getHashesFromAudioMessage(audioMsg);
           collectedHashes.push(...directHashes);
+
+          // Coba unduh audio stream langsung dari audioMessage
+          const audioBuf = await downloadAudioFromMessage(audioMsg);
+          if (audioBuf && Buffer.isBuffer(audioBuf) && audioBuf.length > 0) {
+            const rawHash = hashBuffer(audioBuf);
+            if (rawHash) collectedHashes.push(rawHash);
+
+            // Convert ke OGG Opus untuk mengamankan hash varian hasil saudio
+            const oggBuf = await convertToOggOpusQuick(audioBuf);
+            if (oggBuf && Buffer.isBuffer(oggBuf)) {
+              const oggHash = hashBuffer(oggBuf);
+              if (oggHash) collectedHashes.push(oggHash);
+            }
+          }
         }
 
-        // Unduh media untuk mendapatkan raw hash & ogg hash
-        let buffer = null;
+        // 2. Jika pesan quoted adalah media yang bisa diunduh (audio/video/stiker)
+        let mediaBuf = null;
         if (typeof q.download === "function") {
-          buffer = await q.download().catch(() => null);
+          mediaBuf = await q.download().catch(() => null);
         }
 
-        if (buffer && Buffer.isBuffer(buffer) && buffer.length > 0) {
-          const rawHash = hashBuffer(buffer);
-          if (rawHash) collectedHashes.push(rawHash);
+        if (mediaBuf && Buffer.isBuffer(mediaBuf) && mediaBuf.length > 0) {
+          const bufHash = hashBuffer(mediaBuf);
+          if (bufHash) collectedHashes.push(bufHash);
 
-          // Coba convert ke OGG Opus (seperti pipeline saudio)
-          const oggBuf = await convertToOggOpusQuick(buffer);
+          // Jika media adalah audio/video, coba convert ke OGG
+          const oggBuf = await convertToOggOpusQuick(mediaBuf);
           if (oggBuf && Buffer.isBuffer(oggBuf)) {
             const oggHash = hashBuffer(oggBuf);
             if (oggHash) collectedHashes.push(oggHash);
           }
         }
 
+        // 3. Rekam juga hash sha256 dari metadata stickerMessage jika membalas stiker
+        const stickerObj = q.msg || q.message?.stickerMessage || q;
+        if (stickerObj?.fileSha256) {
+          collectedHashes.push(Buffer.from(stickerObj.fileSha256).toString("hex").toLowerCase());
+          collectedHashes.push(Buffer.from(stickerObj.fileSha256).toString("base64").toLowerCase());
+        }
+        if (stickerObj?.fileEncSha256) {
+          collectedHashes.push(Buffer.from(stickerObj.fileEncSha256).toString("hex").toLowerCase());
+          collectedHashes.push(Buffer.from(stickerObj.fileEncSha256).toString("base64").toLowerCase());
+        }
+
         if (!collectedHashes.length) {
           await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });
-          return m.reply(res.warn("Gagal mengekstrak audio dari pesan yang di-reply. Pastikan membalas audio/stiker audio yang valid."));
+          return m.reply(res.warn("Gagal mengekstrak berkas media dari pesan yang di-reply. Pastikan membalas stiker, audio, atau video yang valid."));
         }
 
         const note = query || "Audio meresahkan / dilarang";
@@ -124,7 +149,7 @@ export default {
         await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
 
         const teks =
-          `✅ *AUDIO BERHASIL DIBLACKLIST*\n\n` +
+          `✅ *BERKAS BERHASIL DIBLACKLIST*\n\n` +
           `> • ID Entry     : #${result.entryId}\n` +
           `> • Alasan       : ${note}\n` +
           `> • Varian Hash  : ${result.hashCount} hash tersimpan\n` +
@@ -178,7 +203,7 @@ export default {
 
       let teks = `📁 *DAFTAR AUDIO BLACKLIST (${list.length})*\n\n`;
       list.forEach((item, idx) => {
-        const who = item.added_by ? `@${String(item.added_by).split("@")[0].split(":")[0]}` : "Admin";
+        const who = item.added_by ? `@${String(item.added_by).split("@")[0].split(":")[0]}` : "Owner";
         teks +=
           `*${idx + 1}. [ID: #${item.id}]*\n` +
           `> • Alasan: ${item.note}\n` +
@@ -207,32 +232,29 @@ export default {
   before: async (m, { sock, isBotAdmin }) => {
     if (!m || !m.isGroup || m.fromMe) return false;
 
-    // Cek apakah pesan membawa audioMessage (stiker audio atau audio)
-    const audioMsg = extractAudioMessage(m);
-    if (!audioMsg) return false;
-
-    // Cek hash audioMessage secara instan
+    // 1. Cek audioMessage jika ada di pesan
     let check = checkMessageAudioBlacklist(m);
 
-    // Jika belum ketemu dan adalah stiker dengan audio, unduh buffer untuk cek raw hash
+    // 2. Jika belum ketemu, cek hash stiker langsung jika pesan adalah stiker
+    const stickerObj = m.msg || m.message?.stickerMessage;
+    if (!check && stickerObj?.fileSha256) {
+      const hexSha = Buffer.from(stickerObj.fileSha256).toString("hex").toLowerCase();
+      check = isHashBlacklisted(hexSha);
+    }
+
+    // 3. Jika belum ketemu dan adalah stiker, unduh buffer untuk cek raw hash
     if (!check && (m.mtype === "stickerMessage" || m.message?.stickerMessage)) {
       try {
         if (typeof m.download === "function") {
           const buf = await m.download().catch(() => null);
           if (buf && Buffer.isBuffer(buf)) {
             check = isBufferBlacklisted(buf);
-            // Jika buffer cocok, rekam juga fileSha256 pesan ini agar berikutnya instan
-            if (check && audioMsg.fileSha256) {
-              const h = Buffer.from(audioMsg.fileSha256).toString("hex").toLowerCase();
-              addAudioBlacklist([h], check.note || "Audio meresahkan", m.sender).catch?.(() => {});
-            }
           }
         }
       } catch {}
     }
 
     if (check && check.isBlacklisted) {
-      // Hapus pesan jika bot adalah admin
       if (isBotAdmin) {
         try {
           await sock.sendMessage(m.from, {
@@ -248,7 +270,7 @@ export default {
           await sock.sendMessage(m.from, {
             text:
               `⚠️ *STIKER AUDIO DIHAPUS!*\n` +
-              `> @${senderNum} Stiker audio yang kamu kirim otomatis dihapus karena mengandung audio yang masuk dalam daftar hitam (blacklist).\n\n` +
+              `> @${senderNum} Pesan stiker yang kamu kirim otomatis dihapus karena masuk dalam daftar hitam (blacklist).\n\n` +
               `*Catatan :* _Kategori: ${check.note}_`,
             mentions: [m.sender],
           });
@@ -256,7 +278,7 @@ export default {
           console.error("[AUTO_DELETE_SAUDIO_ERR]", err.message);
         }
       }
-      return true; // Hentikan eksekusi perintah lain
+      return true;
     }
 
     return false;

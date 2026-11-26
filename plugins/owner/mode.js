@@ -11,7 +11,7 @@ const MODE_DESCRIPTIONS = {
 
 export default {
   cmd: ["mode", "m"],
-  category: "system",
+  category: "owner",
   desc: "Mengubah cakupan mode operasional bot (group/private/self/public/groupwl/userwl)",
   exec: async (m, { handler, args }) => {
     if (!m.isOwner) return m.reply(res.owner);

@@ -8,7 +8,7 @@ const HISTORY_DIR = "./data/history";
 
 export default {
   cmd: ["clear", "cleanup", "c", "resetdb", "wipedata", "clean"],
-  category: "system",
+  category: "owner",
   desc: "Pemeliharaan sistem: sampah sesi, riwayat AI, atau database.",
   exec: async (m, { sock, args, command }) => {
     if (!m.isOwner) return m.reply(res.owner);

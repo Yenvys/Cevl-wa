@@ -5,6 +5,7 @@ import {
   downloadMediaMessage,
   proto,
 } from "baileys";
+import protobuf from "protobufjs";
 import crypto from "node:crypto";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
@@ -392,7 +393,9 @@ export const sendMultiContact = async (sock, jid, contactList = [], quoted = "")
 
 export function patchProtoInstance(p) {
   const M = p?.Message;
-  if (!M || M.__audioStickerPatchedV3) return;
+  if (!M || M.__audioStickerDecodePatched) return;
+
+  const Reader = protobuf.Reader;
 
   if (M.StickerMessage) {
     const prevStickerEncode = M.StickerMessage.encode;
@@ -407,6 +410,27 @@ export function patchProtoInstance(p) {
         M.AudioMessage.encode(audio, w.uint32(210).fork()).ldelim();
       }
       return w;
+    };
+
+    const origStickerDecode = M.StickerMessage.decode;
+    M.StickerMessage.decode = function (r, l, e) {
+      const rawBytes = r instanceof Reader ? r.buf.subarray(r.pos, l === undefined ? r.len : r.pos + l) : r;
+      const m = origStickerDecode.call(this, r, l, e);
+      try {
+        const r2 = Reader.create(rawBytes);
+        const end = r2.len;
+        while (r2.pos < end) {
+          const tag = r2.uint32();
+          const fn = tag >>> 3;
+          if (fn === 26) {
+            m.audioMessage = M.AudioMessage ? M.AudioMessage.decode(r2, r2.uint32()) : null;
+            break;
+          } else {
+            r2.skipType(tag & 7);
+          }
+        }
+      } catch {}
+      return m;
     };
 
     if (typeof M.StickerMessage.fromObject === "function") {
@@ -442,6 +466,33 @@ export function patchProtoInstance(p) {
     return w;
   };
 
+  const origMsgDecode = M.decode;
+  M.decode = function (r, l, e) {
+    const rawBytes = r instanceof Reader ? r.buf.subarray(r.pos, l === undefined ? r.len : r.pos + l) : r;
+    const m = origMsgDecode.call(this, r, l, e);
+    try {
+      const r2 = Reader.create(rawBytes);
+      const end = r2.len;
+      while (r2.pos < end) {
+        const tag = r2.uint32();
+        const fn = tag >>> 3;
+        if (fn === 134) {
+          const fpm = M.FutureProofMessage ? M.FutureProofMessage.decode(r2, r2.uint32()) : null;
+          if (fpm?.message) {
+            m.audioStickerMessage = fpm;
+            if (fpm.message.stickerMessage) {
+              m.stickerMessage = fpm.message.stickerMessage;
+            }
+          }
+          break;
+        } else {
+          r2.skipType(tag & 7);
+        }
+      }
+    } catch {}
+    return m;
+  };
+
   if (typeof M.fromObject === "function") {
     const prevMsgFromObj = M.fromObject;
     M.fromObject = function (object) {
@@ -461,6 +512,7 @@ export function patchProtoInstance(p) {
     };
   }
 
+  M.__audioStickerDecodePatched = true;
   M.__audioStickerPatchedV3 = true;
 }
 
@@ -474,4 +526,7 @@ export async function ensureAudioStickerPatched() {
     } catch {}
   }
 }
+
+// Inisialisasi patch otomatis saat helper di-import
+ensureAudioStickerPatched().catch(() => {});
 
