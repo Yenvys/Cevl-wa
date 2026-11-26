@@ -107,7 +107,12 @@ export async function serialize(sock, m) {
               key: { remoteJid: m.from, id: stanzaId, participant: contextInfo.participant },
               message: qMessage,
             },
-            "buffer"
+            "buffer",
+            {},
+            {
+              reuploadRequest: sock?.updateMediaMessage,
+              logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
+            }
           ).catch(() => null),
       };
     }

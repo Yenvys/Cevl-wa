@@ -22,6 +22,7 @@ import {
   isBufferBlacklisted,
   isHashBlacklisted,
   downloadAudioFromMessage,
+  extractAllMediaHashes,
 } from "../../src/lib/audioBlacklist.js";
 
 const execFileAsync = promisify(execFile);
@@ -92,57 +93,7 @@ export default {
       await sock.sendMessage(m.from, { react: { text: "⏳", key: m.key } });
 
       try {
-        const audioMsg = extractAudioMessage(q, m);
-        const collectedHashes = [];
-
-        // 1. Jika audioMessage terdeteksi (stiker bersuara / VN / Audio)
-        if (audioMsg) {
-          const directHashes = getHashesFromAudioMessage(audioMsg);
-          collectedHashes.push(...directHashes);
-
-          // Coba unduh audio stream langsung dari audioMessage
-          const audioBuf = await downloadAudioFromMessage(audioMsg);
-          if (audioBuf && Buffer.isBuffer(audioBuf) && audioBuf.length > 0) {
-            const rawHash = hashBuffer(audioBuf);
-            if (rawHash) collectedHashes.push(rawHash);
-
-            // Convert ke OGG Opus untuk mengamankan hash varian hasil saudio
-            const oggBuf = await convertToOggOpusQuick(audioBuf);
-            if (oggBuf && Buffer.isBuffer(oggBuf)) {
-              const oggHash = hashBuffer(oggBuf);
-              if (oggHash) collectedHashes.push(oggHash);
-            }
-          }
-        }
-
-        // 2. Jika pesan quoted adalah media yang bisa diunduh (audio/video/stiker)
-        let mediaBuf = null;
-        if (typeof q.download === "function") {
-          mediaBuf = await q.download().catch(() => null);
-        }
-
-        if (mediaBuf && Buffer.isBuffer(mediaBuf) && mediaBuf.length > 0) {
-          const bufHash = hashBuffer(mediaBuf);
-          if (bufHash) collectedHashes.push(bufHash);
-
-          // Jika media adalah audio/video, coba convert ke OGG
-          const oggBuf = await convertToOggOpusQuick(mediaBuf);
-          if (oggBuf && Buffer.isBuffer(oggBuf)) {
-            const oggHash = hashBuffer(oggBuf);
-            if (oggHash) collectedHashes.push(oggHash);
-          }
-        }
-
-        // 3. Rekam juga hash sha256 dari metadata stickerMessage jika membalas stiker
-        const stickerObj = q.msg || q.message?.stickerMessage || q;
-        if (stickerObj?.fileSha256) {
-          collectedHashes.push(Buffer.from(stickerObj.fileSha256).toString("hex").toLowerCase());
-          collectedHashes.push(Buffer.from(stickerObj.fileSha256).toString("base64").toLowerCase());
-        }
-        if (stickerObj?.fileEncSha256) {
-          collectedHashes.push(Buffer.from(stickerObj.fileEncSha256).toString("hex").toLowerCase());
-          collectedHashes.push(Buffer.from(stickerObj.fileEncSha256).toString("base64").toLowerCase());
-        }
+        const collectedHashes = await extractAllMediaHashes(q, m, sock);
 
         if (!collectedHashes.length) {
           await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } });

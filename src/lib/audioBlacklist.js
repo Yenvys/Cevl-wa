@@ -4,7 +4,7 @@
  */
 
 import crypto from "node:crypto";
-import { downloadContentFromMessage } from "baileys";
+import { downloadContentFromMessage, downloadMediaMessage } from "baileys";
 import db from "../database.js";
 import { getMessageFromStoreById } from "../helper.js";
 
@@ -260,4 +260,108 @@ export function checkMessageAudioBlacklist(m) {
   }
 
   return false;
+}
+
+/**
+ * Ekstraksi komprehensif seluruh varian hash media (audio, stiker, video, fileSha256)
+ * Memastikan tidak pernah gagal mengekstrak dari stiker / quoted message
+ */
+export async function extractAllMediaHashes(q, m, sock) {
+  const collectedHashes = new Set();
+
+  function addHashVariant(val) {
+    if (!val) return;
+    if (Buffer.isBuffer(val) || val instanceof Uint8Array) {
+      collectedHashes.add(Buffer.from(val).toString("hex").toLowerCase());
+      collectedHashes.add(Buffer.from(val).toString("base64").toLowerCase());
+    } else if (typeof val === "string") {
+      const clean = val.trim();
+      if (!clean) return;
+      collectedHashes.add(clean.toLowerCase());
+      if (/^[A-Za-z0-9+/=]+$/.test(clean) && clean.length > 20) {
+        try {
+          const b = Buffer.from(clean, "base64");
+          if (b.length === 32) {
+            collectedHashes.add(b.toString("hex").toLowerCase());
+          }
+        } catch {}
+      }
+      if (/^[0-9a-fA-F]{64}$/.test(clean)) {
+        try {
+          const b = Buffer.from(clean, "hex");
+          collectedHashes.add(b.toString("base64").toLowerCase());
+        } catch {}
+      }
+    }
+  }
+
+  // 1. Ekstrak dari audioMessage jika tersedia
+  const audioMsg = extractAudioMessage(q, m);
+  if (audioMsg) {
+    addHashVariant(audioMsg.fileSha256);
+    addHashVariant(audioMsg.fileEncSha256);
+
+    const audioBuf = await downloadAudioFromMessage(audioMsg);
+    if (audioBuf && Buffer.isBuffer(audioBuf) && audioBuf.length > 0) {
+      addHashVariant(hashBuffer(audioBuf));
+    }
+  }
+
+  // 2. Ekstrak metadata fileSha256 dari seluruh kandidat node
+  const rootContext = m?.message?.extendedTextMessage?.contextInfo || m?.msg?.contextInfo || {};
+  const stanzaId = q?.id || rootContext?.stanzaId;
+  const fromStore = stanzaId ? getMessageFromStoreById(stanzaId) : null;
+
+  const candidateNodes = [
+    q?.msg,
+    q?.message,
+    q?.message?.stickerMessage,
+    q?.message?.audioMessage,
+    q?.message?.videoMessage,
+    q?.message?.imageMessage,
+    rootContext?.quotedMessage?.stickerMessage,
+    rootContext?.quotedMessage?.audioMessage,
+    rootContext?.quotedMessage?.videoMessage,
+    rootContext?.quotedMessage?.imageMessage,
+    fromStore?.stickerMessage,
+    fromStore?.audioMessage,
+    fromStore?.videoMessage,
+    fromStore?.imageMessage,
+  ];
+
+  for (const node of candidateNodes) {
+    if (node) {
+      addHashVariant(node.fileSha256);
+      addHashVariant(node.fileEncSha256);
+    }
+  }
+
+  // 3. Unduh buffer media menggunakan q.download() atau downloadMediaMessage
+  let mediaBuf = null;
+  try {
+    if (typeof q?.download === "function") {
+      mediaBuf = await q.download().catch(() => null);
+    }
+    if (!mediaBuf && q) {
+      const realMsg = q.fakeObj || {
+        key: { remoteJid: m?.from, id: stanzaId, participant: rootContext?.participant },
+        message: q.message || q.msg || rootContext?.quotedMessage,
+      };
+      mediaBuf = await downloadMediaMessage(
+        realMsg,
+        "buffer",
+        {},
+        {
+          reuploadRequest: sock?.updateMediaMessage,
+          logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
+        }
+      ).catch(() => null);
+    }
+  } catch {}
+
+  if (mediaBuf && Buffer.isBuffer(mediaBuf) && mediaBuf.length > 0) {
+    addHashVariant(hashBuffer(mediaBuf));
+  }
+
+  return [...collectedHashes];
 }
