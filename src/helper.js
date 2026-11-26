@@ -374,6 +374,7 @@ export const store = {
 };
 
 export const getMessageFromStoreById = (id) => (id ? store.messages.get(id) || null : null);
+export const getRawMessageFromStoreById = (id) => (id ? store.rawMessages.get(id) || null : null);
 
 export const convertToOpus = (input) =>
   new Promise((resolve, reject) => {
@@ -516,7 +517,12 @@ export default async function wrapSocket(sock) {
       const duration = groupCache.get(jid);
       if (duration) content.contextInfo.expiration = duration;
     }
-    return oldSendMessage.call(sock, jid, content, options);
+    const res = await oldSendMessage.call(sock, jid, content, options);
+    if (res?.key?.id && res?.message) {
+      store.messages.set(res.key.id, res.message);
+      store.rawMessages.set(res.key.id, res);
+    }
+    return res;
   };
 
   sock.sendImage = (jid, p, cap = "", q = "", opts = {}) =>

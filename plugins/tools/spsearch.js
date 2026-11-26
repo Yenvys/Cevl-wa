@@ -85,13 +85,13 @@ export default {
 
     packs.forEach((p, idx) => {
       const type = p.isAnimated ? "Animasi" : "Statis";
-      listText += `*${idx + 1}. ${p.name}*\n`;
-      listText += `>   • Author: ${p.author}\n`;
+      listText += `*${idx + 1}. ${(p.name || "").trim()}*\n`;
+      listText += `>   • Author: ${(p.author || "").trim()}\n`;
       listText += `>   • Tipe: ${type} (${p.count} stiker)\n`;
       listText += `>   • ID: ${p.id}\n\n`;
     });
 
-    listText += `────────────────────────\n`;
+    listText += `> ────────────────────────\n`;
     listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack!\n`;
     listText += `> ⏱️ Sesi pemilihan berlaku selama 2 menit.`;
 

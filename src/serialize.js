@@ -2,7 +2,7 @@ import { getContentType, jidNormalizedUser, downloadMediaMessage } from "baileys
 import db, { getLidMapping, saveContact, saveMetadata, syncParticipants } from "./database.js";
 import fs from "node:fs";
 import path from "node:path";
-import { getMessageFromStoreById, groupCache, getAlbumMessages } from "./helper.js";
+import { getMessageFromStoreById, getRawMessageFromStoreById, groupCache, getAlbumMessages } from "./helper.js";
 
 const GROUP_CACHE_TTL = 300000;
 const VIEW_ONCE_TYPES = new Set(["viewOnceMessageV2", "viewOnceMessage", "ephemeralMessage"]);
@@ -77,16 +77,40 @@ export async function serialize(sock, m) {
     const quotedHeader = contextInfo?.quotedMessage;
     if (quotedHeader) {
       const stanzaId = contextInfo.stanzaId;
-      const qMessage = unwrapMessage(getMessageFromStoreById(stanzaId) || quotedHeader);
+      const rawQuoted = getRawMessageFromStoreById(stanzaId);
+      const qMessage = unwrapMessage(rawQuoted?.message || getMessageFromStoreById(stanzaId) || quotedHeader);
       const qType = getContentType(qMessage);
       const qMsg = qMessage?.[qType] || qMessage;
 
-      let qJid = contextInfo.participant;
+      const botJid = jidNormalizedUser(sock.user?.id);
+      let qJid = contextInfo.participant || rawQuoted?.key?.participant;
       if (qJid?.endsWith("@lid")) qJid = (await getLidMapping(qJid)) || qJid;
+
+      let isQuotedFromMe = false;
+      if (rawQuoted?.key?.fromMe !== undefined) {
+        isQuotedFromMe = Boolean(rawQuoted.key.fromMe);
+      } else if (qJid) {
+        isQuotedFromMe = jidNormalizedUser(qJid) === botJid;
+      } else if (!m.isGroup) {
+        isQuotedFromMe = stanzaId?.startsWith("3EB0") || stanzaId?.startsWith("BAE5") || !m.fromMe;
+      }
+
+      const quotedKey = {
+        remoteJid: m.from,
+        fromMe: isQuotedFromMe,
+        id: stanzaId,
+        ...(m.isGroup && !isQuotedFromMe && (qJid || contextInfo.participant)
+          ? { participant: qJid || contextInfo.participant }
+          : {}),
+      };
 
       m.quoted = {
         id: stanzaId,
-        participant: contextInfo.participant,
+        fromMe: isQuotedFromMe,
+        key: quotedKey,
+        remoteJid: m.from,
+        participant: contextInfo.participant || (isQuotedFromMe ? botJid : undefined),
+        sender: isQuotedFromMe ? botJid : (qJid ? jidNormalizedUser(qJid) : (!m.isGroup ? m.sender : undefined)),
         type: qType,
         mtype: qType,
         isViewOnce: ["viewOnceMessageV2", "viewOnceMessage"].includes(qType),
@@ -108,11 +132,10 @@ export async function serialize(sock, m) {
               : ["imageMessage", "videoMessage"].includes(qType)
                 ? qMsg?.caption
                 : "",
-        sender: jidNormalizedUser(qJid),
         download: () =>
           downloadMediaMessage(
             {
-              key: { remoteJid: m.from, id: stanzaId, participant: contextInfo.participant },
+              key: quotedKey,
               message: qMessage,
             },
             "buffer",
