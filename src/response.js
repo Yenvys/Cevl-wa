@@ -61,8 +61,8 @@ export const res = {
         if (clean.startsWith(".")) clean = `${pfx}${clean.slice(1)}`;
         clean = formatWithPrefix(clean, pfx);
 
-        const hasCmd = pfx ? clean.startsWith(`${pfx}${baseCmd}`) : clean.startsWith(baseCmd);
-        if (hasCmd) return clean;
+        if (clean.startsWith(`${pfx}${baseCmd}`)) return clean;
+        if (clean.startsWith(baseCmd)) return `${pfx}${clean}`;
 
         return `${pfx}${baseCmd}${clean ? ` ${clean}` : ""}`;
       };

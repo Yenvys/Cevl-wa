@@ -2,10 +2,12 @@ import {
   prepareWAMessageMedia,
   generateWAMessageFromContent,
   downloadContentFromMessage,
+  downloadMediaMessage,
 } from "baileys";
+import { randomBytes } from "node:crypto";
 import { config } from "../../config.js";
 import { res } from "../../src/response.js";
-import { ensureAudioStickerPatched } from "../../src/helper.js";
+import { ensureAudioStickerPatched, audioStickerCache } from "../../src/helper.js";
 
 const DEFAULT_NEWSLETTER_JID = "120363401731165846@newsletter";
 
@@ -50,7 +52,7 @@ export default {
       );
     }
 
-    const defaultChannel = global.idch || config.newsletterJid || DEFAULT_NEWSLETTER_JID;
+    const defaultChannel = config.newsletterJid || global.idch || DEFAULT_NEWSLETTER_JID;
     let chJid = defaultChannel;
     let customCaption = (m.query || "").trim();
 
@@ -68,72 +70,129 @@ export default {
       const unwrapped = unwrapMessage(rawMessage);
       const qMsg = q.msg || unwrapped[q.type] || unwrapped;
 
-      // 1. Deteksi Stiker Audio (saudio)
-      const stc =
+      // 1. Deteksi Stiker Audio (saudio) atau Stiker Biasa
+      let stc =
         unwrapped.stickerMessage ||
         (q.type === "stickerMessage" ? qMsg : null) ||
         unwrapped.audioStickerMessage?.message?.stickerMessage ||
         rawMessage.stickerMessage;
 
-      const aud =
+      let aud =
         stc?.audioMessage ||
         unwrapped.audioStickerMessage?.message?.stickerMessage?.audioMessage ||
         rawMessage.audioStickerMessage?.message?.stickerMessage?.audioMessage ||
         qMsg?.audioMessage;
 
-      if (stc && aud) {
-        let sBuf = null;
-        try {
-          sBuf = await dlStream(stc, "sticker");
-        } catch {
-          sBuf = await q.download?.();
+      // Cek audioStickerCache jika aud belum ditemukan
+      let cachedAudioInfo = null;
+      if (stc) {
+        if (q.id && (audioStickerCache?.has(q.id) || global.audioStickerCache?.has(q.id))) {
+          cachedAudioInfo = audioStickerCache?.get(q.id) || global.audioStickerCache?.get(q.id);
         }
-
-        const aBuf = await dlStream(aud, "audio");
-
-        if (!sBuf || !aBuf) {
-          throw new Error("Gagal mengunduh berkas stiker audio.");
+        const sha = stc.fileSha256;
+        if (!cachedAudioInfo && sha) {
+          const shaHex = Buffer.isBuffer(sha)
+            ? sha.toString("hex")
+            : Buffer.from(sha, "base64").toString("hex");
+          if (audioStickerCache?.has(shaHex) || global.audioStickerCache?.has(shaHex)) {
+            cachedAudioInfo = audioStickerCache?.get(shaHex) || global.audioStickerCache?.get(shaHex);
+          }
         }
-
-        await ensureAudioStickerPatched();
-
-        const [sMed, aMed] = await Promise.all([
-          prepareWAMessageMedia({ sticker: sBuf }, { upload: sock.waUploadToServer, jid: chJid }),
-          prepareWAMessageMedia(
-            { audio: aBuf, mimetype: aud.mimetype || "audio/ogg; codecs=opus", ptt: aud.ptt ?? true },
-            { upload: sock.waUploadToServer, jid: chJid }
-          ),
-        ]);
-
-        if (stc.isAnimated) sMed.stickerMessage.isAnimated = true;
-        sMed.stickerMessage.audioMessage = aMed.audioMessage;
-
-        const msg = generateWAMessageFromContent(
-          chJid,
-          { stickerMessage: sMed.stickerMessage },
-          { userJid: sock.user?.id }
-        );
-        await sock.relayMessage(chJid, msg.message, { messageId: msg.key.id });
-
-        await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
-        return m.reply(res.success("Stiker audio berhasil diteruskan ke saluran!"));
       }
 
-      // 2. Deteksi Stiker Biasa (tanpa audio)
-      if (stc && !aud) {
-        let sBuf = null;
-        try {
-          sBuf = await dlStream(stc, "sticker");
-        } catch {
-          sBuf = await q.download?.();
-        }
-        if (!sBuf) throw new Error("Gagal mengunduh berkas stiker.");
+      if (cachedAudioInfo) {
+        stc = cachedAudioInfo.stickerMessage || stc;
+        aud = cachedAudioInfo.audioMessage || aud;
+      }
 
+      if (stc) {
+        let sBuf = cachedAudioInfo?.stickerBuffer || null;
+        if (!sBuf) {
+          try {
+            sBuf = await dlStream(stc, "sticker");
+          } catch {
+            sBuf = await q.download?.();
+          }
+          if (!sBuf) {
+            try {
+              sBuf = await downloadMediaMessage(
+                { key: { remoteJid: m.from, id: q.id }, message: { stickerMessage: stc } },
+                "buffer",
+                {},
+                { reuploadRequest: sock?.updateMediaMessage }
+              );
+            } catch {}
+          }
+        }
+
+        let aBuf = cachedAudioInfo?.audioBuffer || null;
+        if (!aBuf && aud) {
+          try {
+            aBuf = await dlStream(aud, "audio");
+          } catch {}
+          if (!aBuf) {
+            try {
+              aBuf = await downloadMediaMessage(
+                { key: { remoteJid: m.from, id: q.id }, message: { audioMessage: aud } },
+                "buffer",
+                {},
+                { reuploadRequest: sock?.updateMediaMessage }
+              );
+            } catch {}
+          }
+        }
+
+        if (!sBuf) {
+          throw new Error("Gagal mengunduh berkas stiker.");
+        }
+
+        const isAnimated = Boolean(stc.isAnimated || cachedAudioInfo?.isAnimated);
+
+        // Kasus A: Stiker Audio (saudio)
+        if (aud || aBuf) {
+          if (!aBuf) {
+            throw new Error("Gagal mengunduh audio dari stiker audio.");
+          }
+
+          await ensureAudioStickerPatched();
+
+          const [sMed, aMed] = await Promise.all([
+            prepareWAMessageMedia(
+              { sticker: sBuf, isAnimated },
+              { upload: sock.waUploadToServer, jid: chJid }
+            ),
+            prepareWAMessageMedia(
+              {
+                audio: aBuf,
+                mimetype: aud?.mimetype || "audio/ogg; codecs=opus",
+                ptt: aud?.ptt ?? true,
+              },
+              { upload: sock.waUploadToServer, jid: chJid }
+            ),
+          ]);
+
+          sMed.stickerMessage.isAnimated = isAnimated;
+          sMed.stickerMessage.audioMessage = aMed.audioMessage;
+
+          const payload = {
+            _proto_: sMed,
+            audioStickerMessage: { message: sMed },
+            messageContextInfo: { messageSecret: randomBytes(32) },
+          };
+          Object.setPrototypeOf(payload, sMed);
+
+          await sock.relayMessage(chJid, payload, {});
+
+          await sock.sendMessage(m.from, { react: { text: "✅", key: m.key } });
+          return m.reply(res.success("Stiker audio berhasil diteruskan ke saluran!"));
+        }
+
+        // Kasus B: Stiker Biasa (tanpa audio)
         const sMed = await prepareWAMessageMedia(
-          { sticker: sBuf, isAnimated: Boolean(stc.isAnimated) },
+          { sticker: sBuf, isAnimated },
           { upload: sock.waUploadToServer, jid: chJid }
         );
-        if (stc.isAnimated) sMed.stickerMessage.isAnimated = true;
+        sMed.stickerMessage.isAnimated = isAnimated;
 
         const msg = generateWAMessageFromContent(
           chJid,

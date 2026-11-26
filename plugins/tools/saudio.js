@@ -21,6 +21,7 @@ import WebP from "node-webpmux";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { config } from "../../config.js";
 import { res } from "../../src/response.js";
+import { store, audioStickerCache } from "../../src/helper.js";
 import {
   isBufferBlacklisted,
   checkMessageAudioBlacklist,
@@ -554,7 +555,40 @@ async function sendCombinedAudioSticker(sock, chat, stickerBuffer, isAnimated, a
   };
   Object.setPrototypeOf(payload, prepared);
 
-  await sock.relayMessage(chat, payload, {});
+  const sentId = await sock.relayMessage(chat, payload, {});
+  const msgId = typeof sentId === "string" ? sentId : sentId?.id;
+
+  try {
+    const sha = prepared.stickerMessage?.fileSha256;
+    const shaHex = sha
+      ? Buffer.isBuffer(sha)
+        ? sha.toString("hex")
+        : Buffer.from(sha, "base64").toString("hex")
+      : null;
+
+    const cacheEntry = {
+      msgId,
+      stickerMessage: prepared.stickerMessage,
+      audioMessage: audioMsg,
+      stickerBuffer,
+      isAnimated: Boolean(isAnimated),
+      timestamp: Date.now(),
+    };
+
+    if (msgId) {
+      store.messages.set(msgId, payload);
+      store.rawMessages.set(msgId, {
+        key: { remoteJid: chat, id: msgId, fromMe: true },
+        message: payload,
+      });
+      audioStickerCache.set(msgId, cacheEntry);
+    }
+    if (shaHex) {
+      audioStickerCache.set(shaHex, cacheEntry);
+    }
+  } catch (e) {
+    console.error("[CACHE AUDIO STICKER ERROR]", e.message);
+  }
 }
 
 function startStickerSession({ m, sock, stickerBuffer, isAnimated, packname, author, usedPrefix, command, notice = "" }) {

@@ -28,6 +28,9 @@ export const groupCache = new Map();
 export const albumCache = new Map();
 global.albumCache = albumCache;
 
+export const audioStickerCache = new Map();
+global.audioStickerCache = audioStickerCache;
+
 const recentMediaBurst = new Map();
 const MAX_ALBUM_CACHE = 300;
 
@@ -35,6 +38,10 @@ function cleanAlbumCache() {
   if (albumCache.size > MAX_ALBUM_CACHE) {
     const keys = Array.from(albumCache.keys()).slice(0, albumCache.size - MAX_ALBUM_CACHE);
     for (const k of keys) albumCache.delete(k);
+  }
+  if (audioStickerCache.size > MAX_ALBUM_CACHE) {
+    const keys = Array.from(audioStickerCache.keys()).slice(0, audioStickerCache.size - MAX_ALBUM_CACHE);
+    for (const k of keys) audioStickerCache.delete(k);
   }
   const now = Date.now();
   for (const [k, v] of recentMediaBurst) {
@@ -274,6 +281,28 @@ export const store = {
         } catch (e) {
           console.error("[ALBUM TRACK ERROR]", e);
         }
+
+        try {
+          const asm = msg.message?.audioStickerMessage?.message?.stickerMessage || msg.message?.stickerMessage;
+          const aud = asm?.audioMessage;
+          if (asm && aud) {
+            const sha = asm.fileSha256;
+            const shaHex = sha
+              ? Buffer.isBuffer(sha)
+                ? sha.toString("hex")
+                : Buffer.from(sha, "base64").toString("hex")
+              : null;
+            const cacheObj = {
+              msgId: msg.key?.id,
+              stickerMessage: asm,
+              audioMessage: aud,
+              isAnimated: Boolean(asm.isAnimated),
+              timestamp: Date.now(),
+            };
+            if (msg.key?.id) audioStickerCache.set(msg.key.id, cacheObj);
+            if (shaHex) audioStickerCache.set(shaHex, cacheObj);
+          }
+        } catch {}
       }
       if (added) {
         this.isDirty = true;

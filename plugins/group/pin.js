@@ -18,11 +18,24 @@ export default {
       args[0]?.toLowerCase() === "lepas";
 
     if (!m.quoted) {
+      if (isUnpin) {
+        return m.reply(
+          res.format(
+            m.prefix,
+            "unpin",
+            [""],
+            "• Balas (reply) pesan yang ingin dilepas dari sematan grup\n" +
+            "• Bot akan langsung melepas sematan pesan tersebut",
+            "Melepas sematan (unpin) pesan di grup"
+          )
+        );
+      }
+
       return m.reply(
         res.format(
           m.prefix,
-          `${command} [24h|7d|30d]`,
-          [`${command} 24h`, `${command} 7d`, `${command} 30d`, "unpin"],
+          "pin [24h|7d|30d]",
+          ["24h", "7d", "30d", "unpin"],
           "• Balas (reply) pesan yang ingin disematkan atau dilepas sematannya\n" +
           "• *24h* : Sematkan pesan selama 24 Jam (1 hari)\n" +
           "• *7d*  : Sematkan pesan selama 7 Hari (1 minggu)\n" +
