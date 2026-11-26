@@ -85,7 +85,51 @@ export const res = {
     }
 
     if (cleanNote) {
-      out += `_Catatan: ${cleanNote}_\n`;
+      let raw = cleanNote.trim();
+      if (raw.startsWith("_") && raw.endsWith("_")) {
+        raw = raw.slice(1, -1).trim();
+      }
+      raw = raw.replace(/^Catatan\s*:\s*/i, "").trim();
+
+      const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (lines.length) {
+        const mainLines = [];
+        const restLines = [];
+        let foundPoint = false;
+
+        for (const l of lines) {
+          const isBullet = /^[•\-\*]\s+/.test(l);
+          const isSubHeader = /^[A-Za-z0-9\s]+:\s*$/.test(l);
+          if (isBullet || isSubHeader || foundPoint) {
+            foundPoint = true;
+            restLines.push(l);
+          } else {
+            mainLines.push(l);
+          }
+        }
+
+        let mainText = mainLines.join(" ").trim();
+        if (mainText.startsWith("_") && mainText.endsWith("_")) {
+          mainText = mainText.slice(1, -1).trim();
+        }
+
+        if (mainText) {
+          out += `*Catatan :* _${mainText}_\n`;
+        } else {
+          out += `*Catatan :*\n`;
+        }
+
+        for (const l of restLines) {
+          if (/^[•\-\*]\s+/.test(l)) {
+            const cleanBullet = l.replace(/^[•\-\*]\s*/, "").trim();
+            out += `> • ${cleanBullet}\n`;
+          } else if (l.startsWith(">")) {
+            out += `${l}\n`;
+          } else {
+            out += `${l}\n`;
+          }
+        }
+      }
     }
 
     return out.trim();
