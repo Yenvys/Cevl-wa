@@ -21,6 +21,10 @@ import WebP from "node-webpmux";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { config } from "../../config.js";
 import { res } from "../../src/response.js";
+import {
+  isBufferBlacklisted,
+  checkMessageAudioBlacklist,
+} from "../../src/lib/audioBlacklist.js";
 
 const execFileAsync = promisify(execFile);
 const ffmpegPath = ffmpegInstaller?.path || "ffmpeg";
@@ -509,6 +513,11 @@ async function convertToOggOpus(buffer, ext = "mp3") {
 async function buildAudioMessageFromBuffer(sock, buffer, ext, fallbackSeconds = 0) {
   const { oggBuffer, realSeconds } = await convertToOggOpus(buffer, ext);
 
+  const blOgg = isBufferBlacklisted(oggBuffer);
+  if (blOgg && blOgg.isBlacklisted) {
+    throw new Error(`Audio ini masuk dalam daftar blacklist (${blOgg.note}).`);
+  }
+
   const { audioMessage } = await prepareWAMessageMedia(
     { audio: oggBuffer, mimetype: "audio/ogg; codecs=opus", ptt: true },
     { upload: sock.waUploadToServer }
@@ -609,6 +618,13 @@ async function consumeSessionWithAudio(m, sock, session, audioNode, audioInfo) {
     const audioBuf = await downloadBuffer(audioNode, audioInfo, sock);
     if (!audioBuf || !audioBuf.length) {
       throw new Error("Gagal mengunduh file audio/video.");
+    }
+
+    const blCheck = checkMessageAudioBlacklist(audioNode) || isBufferBlacklisted(audioBuf);
+    if (blCheck && blCheck.isBlacklisted) {
+      clearUserSession(key);
+      await m.react("❌");
+      return m.reply(res.error(`Audio ini dilarang karena masuk dalam daftar blacklist (${blCheck.note}). Pembuatan Audio Sticker dibatalkan.`));
     }
 
     const ext =
@@ -760,8 +776,21 @@ export default {
 
       // Kasus: Visual + Quoted Audio (Sekaligus langsung jadi)
       if (hasOwnVisual && hasQuotedAudio) {
+        const blDirect = checkMessageAudioBlacklist(quoted);
+        if (blDirect && blDirect.isBlacklisted) {
+          await m.react("❌");
+          return m.reply(res.error(`Audio ini dilarang karena masuk dalam daftar blacklist (${blDirect.note}). Pembuatan Audio Sticker ditolak!`));
+        }
+
         const audioBuf = await downloadBuffer(quoted, quotedInfo, sock);
         if (!audioBuf || !audioBuf.length) throw new Error("Gagal mengunduh audio yang di-reply.");
+
+        const blBuf = isBufferBlacklisted(audioBuf);
+        if (blBuf && blBuf.isBlacklisted) {
+          await m.react("❌");
+          return m.reply(res.error(`Audio ini dilarang karena masuk dalam daftar blacklist (${blBuf.note}). Pembuatan Audio Sticker ditolak!`));
+        }
+
         const ext = /ogg|opus/i.test(quotedInfo.mime) ? "ogg" : /mp4|m4a|aac/i.test(quotedInfo.mime) ? "m4a" : "mp3";
         const audioMsg = await buildAudioMessageFromBuffer(sock, audioBuf, ext, quotedInfo.seconds);
         await sendCombinedAudioSticker(sock, m.from, stickerBuffer, isAnimated, audioMsg);
@@ -773,6 +802,11 @@ export default {
 
       // Kasus: Video (Mencoba ekstrak audio langsung dari file video)
       if (isVideo) {
+        const blVid = isBufferBlacklisted(visualData);
+        if (blVid && blVid.isBlacklisted) {
+          await m.react("❌");
+          return m.reply(res.error(`Audio dalam video ini masuk dalam daftar blacklist (${blVid.note}). Pembuatan Audio Sticker ditolak!`));
+        }
         try {
           const audioMsg = await buildAudioMessageFromBuffer(sock, visualData, "mp4", videoSeconds);
           await sendCombinedAudioSticker(sock, m.from, stickerBuffer, true, audioMsg);
