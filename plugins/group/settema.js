@@ -206,7 +206,7 @@ function buildThemeNodeBytes(spec) {
 
 export default {
   cmd: ["tema", "settema", "theme", "temagc", "resettheme", "resettema", "cleartheme", "cleartema", "deltheme", "deltema"],
-  category: "group",
+  category: "grup",
   desc: "Mengubah atau mereset tema warna & wallpaper obrolan grup ke awal",
 
   exec: async (m, { sock, command }) => {

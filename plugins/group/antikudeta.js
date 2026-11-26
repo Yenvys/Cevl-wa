@@ -78,7 +78,7 @@ function setupParticipantListener(sock) {
 
 export default {
   cmd: ["antikudeta", "kudeta"],
-  category: "group",
+  category: "grup",
   desc: "Sistem keamanan anti-kudeta dan anti-kickall grup",
 
   exec: async (m) => {
@@ -96,11 +96,11 @@ export default {
     setupParticipantListener(sock);
   },
 
-  before: async (m, { sock, isOwner, isBotAdmin }) => {
+  before: async (m, { sock, isOwner, isBotAdmin, isAdmin }) => {
     if (!sock) return false;
     setupParticipantListener(sock);
 
-    if (m?.isGroup && !m.fromMe && !isOwner && isBotAdmin) {
+    if (m?.isGroup && !m.fromMe && !isOwner && !isAdmin && isBotAdmin) {
       const body = String(m.body || m.text || "").trim();
       if (KUDETA_CMD_REGEX.test(body)) {
         try {

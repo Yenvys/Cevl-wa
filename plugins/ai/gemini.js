@@ -34,7 +34,7 @@ function getQuotedText(q) {
   return q?.text || q?.body || q?.msg?.text || q?.msg?.conversation || q?.msg?.extendedTextMessage?.text || "";
 }
 
-async function runGemini(m, sock) {
+async function runGemini(m, sock, command = "gemini") {
   try {
     const q = m.quoted || m;
     const msgData = q.msg || q;
@@ -86,9 +86,8 @@ async function runGemini(m, sock) {
       model: MODEL,
       contents: [...history, userContent],
       config: {
-        systemInstruction: "Kamu adalah asisten AI yang cerdas. Jawab singkat, natural, tanpa emoji berlebihan.",
-        maxOutputTokens: 1080,
-        temperature: 0.4,
+        systemInstruction: "Kamu adalah asisten AI yang cerdas, berwawasan luas, dan sangat membantu. Jawab pertanyaan pengguna secara lengkap, jelas, mendalam, dan terstruktur tanpa batasan panjang kata, sesuai dengan kebutuhan topik yang ditanyakan.",
+        temperature: 0.7,
       },
     });
 
@@ -97,7 +96,7 @@ async function runGemini(m, sock) {
     await m.reply(resultText);
 
     if (response.text) {
-      history.push(userContent, { role: "model", parts: [{ text: resultText.slice(0, 800) }] });
+      history.push(userContent, { role: "model", parts: [{ text: resultText.slice(0, 4000) }] });
       await saveHistory(id, history);
     }
   } catch (e) {
@@ -111,7 +110,7 @@ export default {
   cmd: ["gemini", "g", "gm"],
   category: "ai",
   desc: "Chat AI Gemini (Fast Response + Multi Media)",
-  exec: async (m, { sock }) => runGemini(m, sock),
+  exec: async (m, { sock, command }) => runGemini(m, sock, command),
 
   after: async (m, { sock, handler }) => {
     if (!m.quoted?.text) return;
