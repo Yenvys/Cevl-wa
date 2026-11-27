@@ -29,7 +29,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const ffmpegPath = ffmpegInstaller?.path || "ffmpeg";
-const MAX_DURATION = 25;
+const MAX_AUDIO_DURATION = 36;
 const SESSION_SECONDS = 60;
 
 const tempDir = path.join(process.cwd(), "data", "tmp");
@@ -362,21 +362,26 @@ function isWebpAnimated(buf) {
   return buf.includes(Buffer.from("ANIM"));
 }
 
-async function videoBufferToAnimatedWebp(buffer, shouldCrop = false) {
+function parseDurationFromStderr(stderr) {
+  const match = String(stderr || "").match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+async function videoBufferToAnimatedWebp(buffer, shouldCrop = false, videoSeconds = 0) {
   const tmpId = randomBytes(6).toString("hex");
   const inPath = path.join(tempDir, `as_vid_${tmpId}.mp4`);
   const outPath = path.join(tempDir, `as_out_${tmpId}.webp`);
 
-  const STICKER_ANIM_DURATION = 7;
   const vf = shouldCrop
     ? `crop=min(iw\\,ih):min(iw\\,ih),scale=512:512,format=rgba,setsar=1`
     : `scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000,setsar=1`;
 
-  const encodeAttempt = async (fps, qv) => {
+  const encodeAttempt = async (fps, qv, duration) => {
     await execFileAsync(ffmpegPath, [
       "-y",
       "-i", inPath,
-      "-t", String(STICKER_ANIM_DURATION),
+      "-t", String(duration),
       "-vf", `fps=${fps},${vf}`,
       "-c:v", "libwebp",
       "-lossless", "0",
@@ -393,16 +398,43 @@ async function videoBufferToAnimatedWebp(buffer, shouldCrop = false) {
 
   try {
     await fs.writeFile(inPath, buffer);
-    const profiles = [
-      [10, 50],
-      [8, 36],
-      [6, 24],
-      [5, 16],
-    ];
+
+    let realDuration = Number(videoSeconds) || 0;
+    if (realDuration <= 0) {
+      try {
+        await execFileAsync(ffmpegPath, ["-i", inPath]);
+      } catch (e) {
+        realDuration = parseDurationFromStderr(e?.stderr);
+      }
+    }
+
+    // Maksimalkan durasi animasi stiker: jika video >= 10s, targetkan 10-12 detik
+    const targetDur = realDuration > 0 ? Math.min(realDuration, 12) : 10;
+
+    const profiles = [];
+    if (targetDur >= 10) {
+      profiles.push(
+        { dur: targetDur, fps: 10, qv: 45 },
+        { dur: targetDur, fps: 8, qv: 35 },
+        { dur: 10, fps: 10, qv: 40 },
+        { dur: 10, fps: 8, qv: 30 },
+        { dur: 10, fps: 6, qv: 24 },
+        { dur: 8, fps: 6, qv: 20 },
+        { dur: 7, fps: 6, qv: 16 }
+      );
+    } else {
+      profiles.push(
+        { dur: targetDur, fps: 10, qv: 50 },
+        { dur: targetDur, fps: 8, qv: 36 },
+        { dur: targetDur, fps: 6, qv: 24 },
+        { dur: targetDur, fps: 5, qv: 16 }
+      );
+    }
+
     let webp = null;
-    for (const [fps, qv] of profiles) {
-      webp = await encodeAttempt(fps, qv);
-      if (webp.length <= 880 * 1024) break;
+    for (const p of profiles) {
+      webp = await encodeAttempt(p.fps, p.qv, p.dur);
+      if (webp && webp.length <= 880 * 1024) break;
     }
     return webp;
   } finally {
@@ -448,10 +480,10 @@ async function imageBufferToWebp(buffer, shouldCrop = false) {
   }
 }
 
-async function buildStickerWithExif(buffer, kind, packname, author, shouldCrop = false) {
+async function buildStickerWithExif(buffer, kind, packname, author, shouldCrop = false, videoSeconds = 0) {
   let rawWebp = buffer;
   if (kind === "video") {
-    rawWebp = await videoBufferToAnimatedWebp(buffer, shouldCrop);
+    rawWebp = await videoBufferToAnimatedWebp(buffer, shouldCrop, videoSeconds);
   } else if (kind === "image") {
     rawWebp = await imageBufferToWebp(buffer, shouldCrop);
   }
@@ -486,7 +518,7 @@ async function convertToOggOpus(buffer, ext = "mp3") {
       "-i", inPath,
       "-vn",
       "-map", "0:a:0",
-      "-t", String(MAX_DURATION),
+      "-t", String(MAX_AUDIO_DURATION),
       "-af", "aresample=48000:async=1:first_pts=0",
       "-c:a", "libopus",
       "-b:a", "48k",
@@ -525,7 +557,7 @@ async function buildAudioMessageFromBuffer(sock, buffer, ext, fallbackSeconds = 
   );
 
   const chosenSec = realSeconds > 0 ? realSeconds : fallbackSeconds > 0 ? fallbackSeconds : 5;
-  const finalSeconds = Math.max(1, Math.min(MAX_DURATION, Math.round(chosenSec)));
+  const finalSeconds = Math.max(1, Math.min(MAX_AUDIO_DURATION, Math.round(chosenSec)));
 
   audioMessage.seconds = finalSeconds;
   audioMessage.ptt = true;
@@ -627,7 +659,7 @@ function startStickerSession({ m, sock, stickerBuffer, isAnimated, packname, aut
     `> • *Pack:* ${packname}\n` +
     `> • *Author:* ${author}\n` +
     `> • *Tipe:* ${isAnimated ? "Animated GIF" : "Static Image"}\n` +
-    `> • *Batas Durasi:* ${MAX_DURATION} Detik\n` +
+    `> • *Batas Durasi:* ${MAX_AUDIO_DURATION} Detik\n` +
     `> • *Waktu Tunggu:* ${SESSION_SECONDS} Detik\n`;
 
   if (notice) {
@@ -698,7 +730,7 @@ async function consumeSessionWithAudio(m, sock, session, audioNode, audioInfo) {
 export default {
   cmd: ["stickeraudio", "saudio", "audiosticker", "sa"],
   category: "tools",
-  desc: "Membuat stiker gambar atau GIF bersuara (Audio Sticker) maks 25 detik",
+  desc: "Membuat stiker gambar atau GIF bersuara (Audio Sticker) audio maks 36 detik & animasi s.d. 10-12 detik",
 
   exec: async (m, { sock, command, args, query }) => {
     const key = getSessionKey(m);
@@ -749,7 +781,7 @@ export default {
             "PackName|Author",
             "PackName|Author crop",
           ],
-          "Kirim atau reply foto/video (durasi video > 25 detik otomatis dipotong).\n" +
+          "Kirim atau reply foto/video (durasi audio video > 36 detik otomatis dipotong, animasi stiker dimaksimalkan s.d. 10-12 detik).\n" +
           "Opsi:\n" +
           "• Tambahkan 'crop' atau '-c' agar video/foto lonjong di-crop menjadi kotak 1:1.\n" +
           "• Jika foto statis, kirim/reply audio setelah bot merespon sesi.",
@@ -796,8 +828,8 @@ export default {
       const videoSeconds = visualInfo.seconds || 0;
 
       let durationNotice = "";
-      if (isVideo && videoSeconds > MAX_DURATION) {
-        durationNotice = `*Catatan :* _Durasi video (${Math.round(videoSeconds)}s) otomatis dipotong ke ${MAX_DURATION}s agar sesuai batas WhatsApp._`;
+      if (isVideo && videoSeconds > MAX_AUDIO_DURATION) {
+        durationNotice = `*Catatan :* _Durasi audio video (${Math.round(videoSeconds)}s) otomatis dipotong ke ${MAX_AUDIO_DURATION}s agar sesuai batas WhatsApp._`;
       }
 
       const visualData = await downloadBuffer(visualNode, visualInfo, sock);
@@ -805,7 +837,7 @@ export default {
         throw new Error("Gagal mengunduh media foto/video.");
       }
 
-      const stickerBuffer = await buildStickerWithExif(visualData, visualInfo.kind, packname, author, shouldCrop);
+      const stickerBuffer = await buildStickerWithExif(visualData, visualInfo.kind, packname, author, shouldCrop, videoSeconds);
       const isAnimated = isVideo || isWebpAnimated(stickerBuffer);
 
       // Kasus: Visual + Quoted Audio (Sekaligus langsung jadi)

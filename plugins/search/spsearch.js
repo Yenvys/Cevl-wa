@@ -9,7 +9,7 @@ import { sendCustomStickerPack } from "../../src/lib/stickerpack.js";
 const sessions = new Map();
 
 export default {
-  cmd: ["packsearch", "stickerly", "sps", "caristicker", "spacksearch"],
+  cmd: ["spsearch", "packsearch", "stickerly", "sps", "caristicker", "spacksearch"],
   category: "search",
   desc: "Mencari dan mengunduh sticker pack dari Sticker.ly secara interaktif",
 
@@ -85,14 +85,24 @@ export default {
 
     packs.forEach((p, idx) => {
       const type = p.isAnimated ? "Animasi" : "Statis";
-      listText += `*${idx + 1}. ${(p.name || "").trim()}*\n`;
-      listText += `> • Author: ${(p.author || "").trim()}\n`;
+      const cleanName = (p.name || "Sticker Pack")
+        .replace(/\*/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const cleanAuthor = (p.author || "Unknown")
+        .replace(/\*/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      listText += `*${idx + 1}. ${cleanName}*\n`;
+      listText += `> • Author: ${cleanAuthor}\n`;
       listText += `> • Tipe: ${type} (${p.count} stiker)\n`;
       listText += `> • ID: ${p.id}\n\n`;
     });
 
-    listText += `────────────────────────\n`;
-    listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack! ⏱️ berlaku selama 2 menit.\n`;
+    listText += `> ────────────────────────\n`;
+    listText += `> Balas (reply) pesan ini dengan nomor pilihan (1 - ${packs.length}) untuk mengunduh sticker pack!\n`;
+    listText += `> ⏱️ Sesi pemilihan berlaku selama 2 menit.`;
 
     const sent = await sock.sendMessage(m.from, { text: listText }, { quoted: m });
 

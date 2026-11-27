@@ -89,19 +89,26 @@ export default {
       input = input.replace(mc[0], " ").trim();
     }
 
-    // Set stiker default dari pesan stiker yang di-reply
+    // Set stiker default dari pesan stiker yang di-reply atau media yang dikirim
     if (/^set$/i.test(input)) {
+      const targetNode = m.quoted || m;
       const isStickerMsg =
-        m.quoted?.type === "stickerMessage" ||
-        m.quoted?.mtype === "stickerMessage" ||
-        Boolean(m.quoted?.msg?.mimetype?.includes("webp")) ||
-        Boolean(m.quoted?.mimetype?.includes("webp"));
+        targetNode?.type === "stickerMessage" ||
+        targetNode?.mtype === "stickerMessage" ||
+        Boolean(targetNode?.msg?.mimetype?.includes("webp")) ||
+        Boolean(targetNode?.mimetype?.includes("webp"));
 
-      const st = getQuotedSticker(m.quoted);
+      const isImageMsg =
+        targetNode?.type === "imageMessage" ||
+        targetNode?.mtype === "imageMessage" ||
+        Boolean(targetNode?.msg?.mimetype?.includes("image")) ||
+        Boolean(targetNode?.mimetype?.includes("image"));
 
-      if (!st && !isStickerMsg) {
+      const st = getQuotedSticker(targetNode);
+
+      if (!st && !isStickerMsg && !isImageMsg) {
         return m.reply(
-          res.warn(`Reply stiker yang ingin disimpan sebagai default dengan perintah *${m.prefix ?? "."}${command} set*`)
+          res.warn(`Reply stiker atau foto yang ingin disimpan sebagai default dengan perintah *${m.prefix ?? "."}${command} set*`)
         );
       }
 
@@ -109,11 +116,16 @@ export default {
 
       try {
         let buffer = null;
-        if (typeof m.quoted.download === "function") {
-          buffer = await m.quoted.download().catch(() => null);
+        if (typeof targetNode.download === "function") {
+          buffer = await targetNode.download().catch(() => null);
         }
 
         if (buffer && Buffer.isBuffer(buffer) && buffer.length > 0) {
+          // Jika gambar non-webp, konversi ke webp 512x512
+          if (!buffer.toString("ascii", 0, 4).includes("RIFF")) {
+            buffer = await toWebp(buffer);
+          }
+
           const dir = path.dirname(STICKER_WEBP_PATH);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
           fs.writeFileSync(STICKER_WEBP_PATH, buffer);
@@ -169,6 +181,7 @@ export default {
 
     try {
       let stickerMessage = null;
+      let stickerBuffer = null;
 
       // 1. Jika pengguna memberikan URL langsung
       if (/^https?:\/\//i.test(input)) {
@@ -185,25 +198,29 @@ export default {
           headers: { "User-Agent": "Mozilla/5.0" },
         });
 
-        let webp;
         try {
-          webp = await toWebp(Buffer.from(resp.data));
+          stickerBuffer = await toWebp(Buffer.from(resp.data));
         } catch {
           await sock.sendMessage(m.from, { react: { text: "❌", key: m.key } }).catch(() => { });
           return m.reply(res.warn("Berkas dari URL bukan berkas gambar atau stiker yang valid."));
         }
 
-        const media = await prepareWAMessageMedia({ sticker: webp }, { upload: sock.waUploadToServer });
-        stickerMessage = media.stickerMessage;
+        const media = await prepareWAMessageMedia({ sticker: stickerBuffer }, { upload: sock.waUploadToServer }).catch(() => null);
+        stickerMessage = media?.stickerMessage;
       }
       // 2. Gunakan stiker default yang sudah disimpan
       else {
-        // A. Cek cache memori (valid 24 jam)
+        // A. Cek file WebP lokal terlebih dahulu
+        if (fs.existsSync(STICKER_WEBP_PATH)) {
+          stickerBuffer = fs.readFileSync(STICKER_WEBP_PATH);
+        }
+
+        // B. Cek cache memori (valid 24 jam)
         if (cachedStickerMessage && Date.now() - cachedStickerTime < 24 * 3600 * 1000) {
           stickerMessage = cachedStickerMessage;
         }
 
-        // B. Cek file JSON data
+        // C. Cek file JSON data
         if (!stickerMessage) {
           stickerMessage = loadStickerJson();
           if (stickerMessage) {
@@ -212,11 +229,10 @@ export default {
           }
         }
 
-        // C. Fallback re-upload dari file WebP jika belum ada JSON
-        if (!stickerMessage && fs.existsSync(STICKER_WEBP_PATH)) {
-          const webpBuf = fs.readFileSync(STICKER_WEBP_PATH);
+        // D. Re-upload dari file WebP jika belum ada JSON
+        if (!stickerMessage && stickerBuffer) {
           const media = await prepareWAMessageMedia(
-            { sticker: webpBuf },
+            { sticker: stickerBuffer },
             { upload: sock.waUploadToServer }
           ).catch(() => null);
 
@@ -228,7 +244,7 @@ export default {
           }
         }
 
-        if (!stickerMessage) {
+        if (!stickerBuffer && !stickerMessage) {
           await sock.sendMessage(m.from, { react: { text: "⚠️", key: m.key } }).catch(() => { });
           return m.reply(
             res.warn(`Belum ada stiker default. Reply sebuah stiker lalu ketik *${m.prefix ?? "."}${command} set* terlebih dahulu.`)
@@ -253,10 +269,7 @@ export default {
       } else if (m.quoted.participant && jidNormalizedUser(m.quoted.participant) === botJid) {
         isFromMe = true;
       } else if (!m.isGroup) {
-        // Di chat pribadi (DM):
-        // Pesan yang dikirim bot biasanya berawalan '3EB0' atau 'BAE5'
-        // Jika user mereply bot dalam sesi DM, default to true jika format ID cocok atau incoming dari user
-        isFromMe = stanzaId?.startsWith("3EB0") || stanzaId?.startsWith("BAE5") || !m.fromMe;
+        isFromMe = stanzaId?.startsWith("3EB0") || stanzaId?.startsWith("BAE5") || Boolean(m.quoted.fromMe);
       }
 
       const parentKey = {
@@ -272,30 +285,45 @@ export default {
         }
       }
 
-      // 4. Kirim sticker reaction ke pesan parent via generateWAMessageFromContent & sock.relayMessage
+      // 4. Kirim stiker quote resmi via Baileys ori + relay STICKER_ANNOTATION untuk dukungan reaction WhatsApp
+      const finalBuffer = stickerBuffer || (fs.existsSync(STICKER_WEBP_PATH) ? fs.readFileSync(STICKER_WEBP_PATH) : null);
+
       for (let i = 0; i < count; i++) {
-        const fullMsg = generateWAMessageFromContent(
-          m.from,
-          {
-            stickerMessage,
-            messageContextInfo: {
-              messageAssociation: {
-                associationType: 11, // STICKER_ANNOTATION
-                parentMessageKey: parentKey,
+        // Kirim via sock.sendMessage standar Baileys dengan quoted pesan yang di-reply (selalu berhasil & tampil di semua client)
+        if (finalBuffer) {
+          await sock.sendMessage(m.from, { sticker: finalBuffer }, { quoted: m.quoted });
+        } else if (stickerMessage) {
+          await sock.relayMessage(m.from, { stickerMessage }, { quoted: m.quoted }).catch(() => { });
+        }
+
+        // Kirim juga association STICKER_ANNOTATION untuk client WhatsApp yang mendukung reaction badge stiker
+        if (stickerMessage && parentKey) {
+          try {
+            const fullMsg = generateWAMessageFromContent(
+              m.from,
+              {
+                stickerMessage,
+                messageContextInfo: {
+                  messageAssociation: {
+                    associationType: 11, // STICKER_ANNOTATION
+                    parentMessageKey: parentKey,
+                  },
+                },
               },
-            },
-          },
-          { userJid: sock.user?.id }
-        );
+              { userJid: sock.user?.id }
+            );
 
-        await sock.relayMessage(m.from, fullMsg.message, {
-          messageId: fullMsg.key.id,
-        });
+            await sock.relayMessage(m.from, fullMsg.message, {
+              messageId: fullMsg.key.id,
+            });
 
-        // Simpan pesan association yang dikirim ke store
-        if (fullMsg.key?.id) {
-          store.messages.set(fullMsg.key.id, fullMsg.message);
-          store.rawMessages.set(fullMsg.key.id, fullMsg);
+            if (fullMsg.key?.id) {
+              store.messages.set(fullMsg.key.id, fullMsg.message);
+              store.rawMessages.set(fullMsg.key.id, fullMsg);
+            }
+          } catch (e) {
+            // Abaikan jika relay annotation gagal, stiker utama sudah terkirim via Baileys
+          }
         }
 
         if (i < count - 1) await new Promise((r) => setTimeout(r, 600));
